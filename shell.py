@@ -5,6 +5,8 @@ import re, glob
 import readline
 from dataclasses import dataclass
 
+version = 'phil shell 0.07'
+
 @dataclass
 class Command():
     cmd: str
@@ -31,7 +33,7 @@ def exit(status_code = '0'):
     retcode = int(status_code) & 0xff if status_code.isnumeric() else 0
     sys.exit(retcode)
 
-builtins = {'cd' : chdir, 'exit': exit}
+builtins = {'cd' : chdir, 'exit': exit, 'version': lambda: print(version) }
 
 def pipesplit(str):
     return str.split('|')
@@ -60,6 +62,14 @@ def prompt():
     home = os.path.expanduser("~")
     path = os.getcwd().replace(home, "~")
     return f'{os.getlogin()}@{os.uname().nodename}:{path}$ '
+
+
+def add_pipe_descriptors(commands):
+    if len(commands) > 1:
+        i = 0
+        while i <= len(commands) - 2:
+            commands[i+1].stdin, commands[i].stdout = os.pipe()
+            i += 1
 
 def run_command(cmd):
     pid = os.fork()
@@ -94,12 +104,8 @@ def process_line(line):
     commands = [expand_user(x) for x in commands]
     commands = [glob_args(cmd) for cmd in commands]
     commands = list([Command(resolve_path(cmd[0]), cmd) for cmd in commands])
-    
-    if len(commands) > 1:
-        i = 0
-        while i <= len(commands) - 2:
-            commands[i+1].stdin, commands[i].stdout = os.pipe2(0)
-            i += 1
+
+    add_pipe_descriptors(commands)
 
     childprocs = []
     for command in commands:
