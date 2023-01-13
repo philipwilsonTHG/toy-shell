@@ -3,17 +3,75 @@
 import os, sys, signal
 import re, glob
 import readline
-from dataclasses import dataclass
 
-version = 'phil shell 0.07'
+version = 'psh 0.09'
 
-@dataclass
 class Command():
-    cmd: str
-    args: list
-    stdin: int = 0
-    stdout: int = 1
-    stderr: int = 2
+    file_redirect_pattern = re.compile(r"(\d*>+$|<)")
+    fd_redirect_pattern = re.compile(r"(\d+)>&(\d+)")
+
+    def __init__(self, line):
+        self.line = line
+        self.stdin = sys.stdin.fileno()
+        self.stdout = sys.stdout.fileno()
+        self.stderr = sys.stderr.fileno()
+        self.line = os.path.expandvars(self.line)
+        self.args = lex(self.line)
+        self.args = list([os.path.expanduser(token) for token in self.args])
+        self.args = glob_args(self.args)
+        self.cmd = resolve_path(self.args[0])
+        self.apply_redirects()
+
+    def __str__(self):
+        return f'{self.args} stdin={self.stdin} stdout={self.stdout} stderr={self.stderr}'
+        
+    def apply_redirects(self):
+        remove = []
+        for index, arg in enumerate(self.args):
+            if self.file_redirect_pattern.match(arg):
+                self.apply_file_redirect(arg, self.args[index + 1])
+                remove.extend((index, index+1))
+            elif match := self.fd_redirect_pattern.match(arg):
+                fds = tuple([int(x) for x in match.groups()])
+                self.apply_fd_redirect(*fds)
+                remove.append(index)
+        for index in remove[::-1]:
+            del(self.args[index])
+
+    def apply_file_redirect(self, verb, filename):
+        match verb:
+            case '>':
+                self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+            case '<':
+                self.stdin = os.open(filename, os.O_RDONLY)
+            case '>>':
+                self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_APPEND)
+            case '2>':
+                self.stderr = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+            case '2>>':
+                self.stderr = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_APPEND)
+
+    def apply_fd_redirect(self, from_fd, to_fd):
+        if from_fd == 1:
+            self.stdout = to_fd
+        elif from_fd == 2:
+            self.stderr = to_fd
+        else:
+            print(f"unsupported redirect {from_fd} to {to_fd}") 
+                
+    def run(self):
+        pid = os.fork()
+        if pid == 0:
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
+            os.dup2(self.stdin, sys.stdin.fileno())
+            os.dup2(self.stdout, sys.stdout.fileno())
+            os.dup2(self.stderr, sys.stderr.fileno())
+            os.execv(self.cmd, self.args)        
+        else:
+            self.stdin == sys.stdin.fileno() or  os.close(self.stdin)
+            self.stdout == sys.stdout.fileno() or self.stdout < 3 or os.close(self.stdout)
+            self.stderr == sys.stderr.fileno() or self.stderr < 3 or os.close(self.stderr)
+        return pid
 
 cwd_history = [os.getcwd()]
 
@@ -38,11 +96,8 @@ builtins = {'cd' : chdir, 'exit': exit, 'version': lambda: print(version) }
 def pipesplit(str):
     return str.split('|')
 
-def lex(text):
-    return text.strip().split()
-
-def expand_user(arglist):
-    return list([os.path.expanduser(token) for token in arglist])
+def lex(line):
+    return line.strip().split()
 
 def glob_args(arglist):
     globbed = (glob.glob(token) or [token] for token in arglist)
@@ -63,31 +118,11 @@ def prompt():
     path = os.getcwd().replace(home, "~")
     return f'{os.getlogin()}@{os.uname().nodename}:{path}$ '
 
-
 def add_pipe_descriptors(commands):
-    if len(commands) > 1:
-        i = 0
-        while i <= len(commands) - 2:
-            commands[i+1].stdin, commands[i].stdout = os.pipe()
-            i += 1
-
-def run_command(cmd):
-    pid = os.fork()
-    if pid == 0:
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
-        os.dup2(cmd.stdin, 0)
-        os.dup2(cmd.stdout, 1)
-        os.dup2(cmd.stderr, 2)
-        os.execv(cmd.cmd, cmd.args)        
-    else:
-        if cmd.stdin != 0:
-            os.close(cmd.stdin)
-        if cmd.stdout != 1:
-            os.close(cmd.stdout)
-        if cmd.stderr != 2:
-            os.close(cmd.stderr)
-            
-    return pid
+    i = 0
+    while i <= len(commands) - 2:
+        commands[i+1].stdin, commands[i].stdout = os.pipe()
+        i += 1
 
 def process_line(line):
     sig, ret = 0, 0
@@ -100,16 +135,12 @@ def process_line(line):
         return builtins[cmd](*tokens[1:])
     
     commands = pipesplit(line)
-    commands = [lex(str) for str in commands]
-    commands = [expand_user(x) for x in commands]
-    commands = [glob_args(cmd) for cmd in commands]
-    commands = list([Command(resolve_path(cmd[0]), cmd) for cmd in commands])
-
+    commands = [Command(str) for str in commands]
     add_pipe_descriptors(commands)
 
     childprocs = []
     for command in commands:
-        pid = run_command(command)
+        pid = command.run()
         childprocs.append(pid)
 
         while childprocs:
@@ -126,7 +157,7 @@ def main():
         if not line:
             continue
 
-        result = re.search(r"(eval|exec)\((.*)\)", line)
+        result = re.search(r"^\s*(eval|exec)\s*(.*)", line)
         if result and len(result.groups()) == 2:
             (verb, arg) = result.groups()
             if verb == 'eval':
@@ -137,7 +168,6 @@ def main():
         else:
             process_line(line)
 
-        
 def init_readline():
     readline.parse_and_bind("tab: complete")
     histfile = os.path.join(os.path.expanduser("~"), ".python_history")
