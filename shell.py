@@ -4,7 +4,7 @@ import os, sys, signal
 import re, glob
 import readline
 
-version = 'psh 0.09'
+version = 'psh 0.091'
 
 class Command():
     file_redirect_pattern = re.compile(r"(\d*>+$|<)")
@@ -40,10 +40,10 @@ class Command():
 
     def apply_file_redirect(self, verb, filename):
         match verb:
-            case '<':
-                self.stdin = os.open(filename, os.O_RDONLY)
             case '>':
                 self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
+            case '<':
+                self.stdin = os.open(filename, os.O_RDONLY)
             case '>>':
                 self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_APPEND)
             case '2>':
@@ -60,10 +60,6 @@ class Command():
             print(f"unsupported redirect {from_fd} to {to_fd}") 
                 
     def run(self):
-        cmd = self.args[0]
-        if cmd in builtins:
-            return builtins[cmd](*self.args[1:])
-        
         pid = os.fork()
         if pid == 0:
             signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -129,15 +125,23 @@ def add_pipe_descriptors(commands):
         i += 1
 
 def process_line(line):
-    commands = pipesplit(line)
-    commands = [Command(str) for str in commands]
+    sig, ret = 0, 0
+        
+    tokens = lex(line)
+    first_token = tokens[0]
+        
+    if first_token in builtins:
+        tokens = [os.path.expanduser(token) for token in tokens]
+        tokens = glob_args(tokens)
+        return builtins[first_token](*tokens[1:])
+    
+    commands = [Command(str) for str in pipesplit(line)]
     add_pipe_descriptors(commands)
 
     childprocs = []
     for command in commands:
         pid = command.run()
-        if pid:
-            childprocs.append(pid)
+        childprocs.append(pid)
 
         while childprocs:
             (childpid, status) = os.wait()
