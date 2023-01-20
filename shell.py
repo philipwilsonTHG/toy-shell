@@ -40,10 +40,10 @@ class Command():
 
     def apply_file_redirect(self, verb, filename):
         match verb:
-            case '>':
-                self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
             case '<':
                 self.stdin = os.open(filename, os.O_RDONLY)
+            case '>':
+                self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_TRUNC)
             case '>>':
                 self.stdout = os.open(filename, os.O_CREAT | os.O_WRONLY | os.O_APPEND)
             case '2>':
@@ -60,6 +60,10 @@ class Command():
             print(f"unsupported redirect {from_fd} to {to_fd}") 
                 
     def run(self):
+        cmd = self.args[0]
+        if cmd in builtins:
+            return builtins[cmd](*self.args[1:])
+        
         pid = os.fork()
         if pid == 0:
             signal.signal(signal.SIGINT, signal.SIG_DFL)
@@ -125,15 +129,6 @@ def add_pipe_descriptors(commands):
         i += 1
 
 def process_line(line):
-    sig, ret = 0, 0
-        
-    tokens = [os.path.expanduser(token) for token in lex(line)]
-    tokens = glob_args(tokens)
-    cmd = tokens[0]
-        
-    if cmd in builtins:
-        return builtins[cmd](*tokens[1:])
-    
     commands = pipesplit(line)
     commands = [Command(str) for str in commands]
     add_pipe_descriptors(commands)
@@ -141,7 +136,8 @@ def process_line(line):
     childprocs = []
     for command in commands:
         pid = command.run()
-        childprocs.append(pid)
+        if pid:
+            childprocs.append(pid)
 
         while childprocs:
             (childpid, status) = os.wait()
