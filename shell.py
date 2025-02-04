@@ -4,7 +4,7 @@ import os, sys, signal
 import re, glob
 import readline
 
-version = "psh 0.091"
+version = "psh 0.092"
 
 
 class Command:
@@ -102,7 +102,43 @@ def exit(status_code="0"):
     sys.exit(retcode)
 
 
-builtins = {"cd": chdir, "exit": exit, "version": lambda: print(version)}
+def export(*args):
+    """shell builtin - set environment variables"""
+    if not args:
+        # Print all environment variables when no args provided
+        for key, value in sorted(os.environ.items()):
+            print(f"{key}={value}")
+        return
+
+    for arg in args:
+        try:
+            key, value = arg.split("=", 1)
+            if key:
+                os.environ[key] = value
+        except ValueError:
+            sys.stderr.write(f"export: invalid format: {arg}\n")
+
+
+def unset(*args):
+    """shell builtin - unset environment variables"""
+    if not args:
+        sys.stderr.write("unset: missing variable name\n")
+        return
+    
+    for arg in args:
+        try:
+            del os.environ[arg]
+        except KeyError:
+            sys.stderr.write(f"unset: {arg}: not found\n")
+
+
+builtins = {
+    "cd": chdir,
+    "exit": exit,
+    "version": lambda: print(version),
+    "export": export,
+    "unset": unset
+}
 
 
 def pipesplit(str):
@@ -192,6 +228,7 @@ def init_readline():
     readline.parse_and_bind("tab: complete")
     histfile = os.path.join(os.path.expanduser("~"), ".python_history")
     try:
+        print('reading ', histfile)
         readline.read_history_file(histfile)
         readline.set_history_length(1000)
 
