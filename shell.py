@@ -3,8 +3,10 @@
 import os, sys, signal
 import re, glob
 import readline
+import subprocess
+import tempfile
 
-version = "psh 0.092"
+version = "psh 0.093"
 
 
 class Command:
@@ -145,8 +147,38 @@ def pipesplit(str):
     return str.split("|")
 
 
+def execute_command_substitution(command):
+    """Execute a command and return its output as a string"""
+    # Remove the $() wrapper
+    command = command[2:-1].strip()
+    
+    # Create temporary files for output capture
+    with tempfile.TemporaryFile() as stdout_file:
+        try:
+            # Execute command and capture output
+            subprocess.run(command, shell=True, stdout=stdout_file, stderr=subprocess.PIPE, text=True)
+            stdout_file.seek(0)
+            output = stdout_file.read().decode().strip()
+            return output
+        except subprocess.CalledProcessError as e:
+            sys.stderr.write(f"Command substitution failed: {e}\n")
+            return ""
+
+def expand_command_substitution(line):
+    """Expand $(command) syntax in the input line"""
+    pattern = r'\$\([^()]+\)'
+    while re.search(pattern, line):
+        match = re.search(pattern, line)
+        if match:
+            cmd = match.group(0)
+            output = execute_command_substitution(cmd)
+            line = line[:match.start()] + output + line[match.end():]
+    return line
+
 def lex(line):
-    return line.strip().split()
+    # Expand command substitutions before splitting
+    line = expand_command_substitution(line.strip())
+    return line.split()
 
 
 def glob_args(arglist):
