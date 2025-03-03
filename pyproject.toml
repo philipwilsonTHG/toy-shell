@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "psh"
-version = "0.1.1"
+version = "0.1.2"
 description = "A feature-rich Unix shell implemented in Python"
 authors = [
     {name = "Python Shell Contributors"}
