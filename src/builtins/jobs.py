@@ -3,7 +3,7 @@
 import os
 import signal
 import sys
-from typing import List
+from typing import List, Optional
 
 from ..context import SHELL, JobStatus
 
@@ -100,7 +100,7 @@ class JobManager:
 JOB_MANAGER = JobManager()
 
 
-def jobs(args: List[str] = None) -> int:
+def jobs(args: Optional[List[str]] = None) -> int:
     """List active jobs
     
     Usage: jobs [-l]
@@ -108,7 +108,7 @@ def jobs(args: List[str] = None) -> int:
     Options:
         -l  Show process IDs in addition to job IDs
     """
-    if not args:
+    if args is None:
         args = []
     
     show_pids = '-l' in args
@@ -124,6 +124,10 @@ def jobs(args: List[str] = None) -> int:
     
     # Print job information
     for job in job_list:
+        # Skip jobs that are marked as DONE
+        if job.status == JobStatus.DONE:
+            continue
+            
         job_info = SHELL.format_job_status(job)
         if show_pids:
             job_info += f" (pgid: {job.pgid})"
@@ -132,14 +136,14 @@ def jobs(args: List[str] = None) -> int:
     return 0
 
 
-def fg(args: List[str] = None) -> int:
+def fg(args: Optional[List[str]] = None) -> int:
     """Bring job to foreground
     
     Usage: fg [%job_id]
     
     If no job ID is specified, the most recent job is used.
     """
-    if not args:
+    if args is None:
         args = []
     
     # Update job statuses
@@ -169,9 +173,19 @@ def fg(args: List[str] = None) -> int:
             return 1
         job_id = jobs[-1].id
     
+    # Ensure job_id is not None at this point
+    if job_id is None:
+        print("fg: no current job", file=sys.stderr)
+        return 1
+        
     # Get job
     job = SHELL.get_job(job_id)
     if not job:
+        print(f"fg: job {job_id} not found", file=sys.stderr)
+        return 1
+    
+    # Ensure the job isn't marked as done
+    if job.status == JobStatus.DONE:
         print(f"fg: job {job_id} not found", file=sys.stderr)
         return 1
     
@@ -183,14 +197,14 @@ def fg(args: List[str] = None) -> int:
     return JOB_MANAGER.bring_to_foreground(job)
 
 
-def bg(args: List[str] = None) -> int:
+def bg(args: Optional[List[str]] = None) -> int:
     """Continue job in background
     
     Usage: bg [%job_id]
     
     If no job ID is specified, the most recent stopped job is used.
     """
-    if not args:
+    if args is None:
         args = []
     
     # Update job statuses
@@ -220,9 +234,19 @@ def bg(args: List[str] = None) -> int:
             return 1
         job_id = jobs[-1].id
     
+    # Ensure job_id is not None at this point
+    if job_id is None:
+        print("bg: no current job", file=sys.stderr)
+        return 1
+        
     # Get job
     job = SHELL.get_job(job_id)
     if not job:
+        print(f"bg: job {job_id} not found", file=sys.stderr)
+        return 1
+    
+    # Ensure the job isn't marked as done
+    if job.status == JobStatus.DONE:
         print(f"bg: job {job_id} not found", file=sys.stderr)
         return 1
     
@@ -231,8 +255,8 @@ def bg(args: List[str] = None) -> int:
         return 1
     
     # Continue job in background - skip in tests to avoid ProcessLookupError
-    if not os.getenv('PYTEST_RUNNING'):
-        JOB_MANAGER.continue_in_background(job)
-    else:
+    if os.getenv('PYTEST_RUNNING'):
         print(f"[{job.id}] {job.command} &")
+    else:
+        JOB_MANAGER.continue_in_background(job)
     return 0

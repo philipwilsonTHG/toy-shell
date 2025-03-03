@@ -81,6 +81,8 @@ def temp_home(tmp_path):
 def running_job():
     """Create a dummy running job"""
     job = Job(id=1, pgid=12345, command='sleep 100', status=JobStatus.RUNNING, processes=[12345])
+    # Always set initially to RUNNING to avoid the DONE status in tests
+    job.status = JobStatus.RUNNING
     SHELL.jobs[job.id] = job
     yield job
     if job.id in SHELL.jobs:
@@ -91,6 +93,8 @@ def running_job():
 def stopped_job():
     """Create a dummy stopped job"""
     job = Job(id=4, pgid=25679, command='sleep 100', status=JobStatus.STOPPED, processes=[25679])
+    # Always set initially to STOPPED to avoid the DONE status in tests
+    job.status = JobStatus.STOPPED
     SHELL.jobs[job.id] = job
     yield job
     if job.id in SHELL.jobs:

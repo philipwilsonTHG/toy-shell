@@ -5,7 +5,7 @@ import tempfile
 import pytest
 from unittest.mock import patch, MagicMock
 
-from src.context import SHELL, JobStatus
+from src.context import SHELL, JobStatus, Job
 from src.builtins.jobs import jobs, fg, bg
 
 
@@ -34,32 +34,49 @@ def test_jobs_empty(capsys):
     assert captured.err == ""
 
 
-def test_jobs_list(running_job, capsys):
+def test_jobs_list(capsys):
     """Test jobs command with one job"""
-    # Set job to running for the test
-    running_job.status = JobStatus.RUNNING
-    
-    jobs()
-    captured = capsys.readouterr()
-    
-    assert f"[{running_job.id}]" in captured.out
-    assert "Running" in captured.out
-    assert running_job.command in captured.out
+    # Patch update_job_status to prevent auto-marking as DONE
+    with patch('src.context.ShellContext.update_job_status'):
+        # Create a job directly in the test
+        SHELL.jobs.clear()
+        job = Job(id=1, pgid=12345, command='sleep 100', status=JobStatus.RUNNING, processes=[12345])
+        SHELL.jobs[job.id] = job
+        
+        try:
+            jobs()
+            captured = capsys.readouterr()
+            
+            assert f"[{job.id}]" in captured.out
+            assert "Running" in captured.out
+            assert job.command in captured.out
+        finally:
+            # Clean up
+            SHELL.jobs.clear()
 
 
-def test_jobs_multiple(running_job, stopped_job, capsys):
+def test_jobs_multiple(capsys):
     """Test jobs command with multiple jobs"""
-    # Set job statuses for test
-    running_job.status = JobStatus.RUNNING
-    stopped_job.status = JobStatus.STOPPED
-    
-    jobs()
-    captured = capsys.readouterr()
-    
-    assert f"[{running_job.id}]" in captured.out
-    assert f"[{stopped_job.id}]" in captured.out
-    assert "Running" in captured.out
-    assert "Stopped" in captured.out
+    # Patch update_job_status to prevent auto-marking as DONE
+    with patch('src.context.ShellContext.update_job_status'):
+        # Create jobs directly in the test
+        SHELL.jobs.clear()
+        running_job = Job(id=1, pgid=12345, command='sleep 100', status=JobStatus.RUNNING, processes=[12345])
+        stopped_job = Job(id=2, pgid=25679, command='sleep 200', status=JobStatus.STOPPED, processes=[25679])
+        SHELL.jobs[running_job.id] = running_job
+        SHELL.jobs[stopped_job.id] = stopped_job
+        
+        try:
+            jobs()
+            captured = capsys.readouterr()
+            
+            assert f"[{running_job.id}]" in captured.out
+            assert f"[{stopped_job.id}]" in captured.out
+            assert "Running" in captured.out
+            assert "Stopped" in captured.out
+        finally:
+            # Clean up
+            SHELL.jobs.clear()
     
 
 def test_bg_no_args(capsys):
@@ -76,19 +93,27 @@ def test_bg_invalid_job(capsys):
     assert "not found" in captured.err.lower()
 
 
-def test_bg_resume_job(stopped_job, capsys):
+def test_bg_resume_job(capsys):
     """Test resuming a stopped job"""
-    # Ensure job is stopped
-    stopped_job.status = JobStatus.STOPPED
-    
-    bg(str(stopped_job.id))
-    captured = capsys.readouterr()
-    
-    # In test mode, we don't actually change the job status
-    # Just check that the output shows the job would be continued
-    assert f"[{stopped_job.id}]" in captured.out
-    assert f"{stopped_job.command}" in captured.out
-    assert "&" in captured.out
+    # Patch update_job_status to prevent auto-marking as DONE
+    with patch('src.context.ShellContext.update_job_status'):
+        # Create a stopped job directly in the test
+        SHELL.jobs.clear()
+        job = Job(id=4, pgid=25679, command='sleep 100', status=JobStatus.STOPPED, processes=[25679])
+        SHELL.jobs[job.id] = job
+        
+        try:
+            bg(str(job.id))
+            captured = capsys.readouterr()
+            
+            # In test mode, we don't actually change the job status
+            # Just check that the output shows the job would be continued
+            assert f"[{job.id}]" in captured.out
+            assert f"{job.command}" in captured.out
+            assert "&" in captured.out
+        finally:
+            # Clean up
+            SHELL.jobs.clear()
 
 
 def test_fg_no_args(capsys):
@@ -105,17 +130,24 @@ def test_fg_invalid_job(capsys):
     assert "not found" in captured.err.lower()
 
 
-def test_fg_bring_to_foreground(running_job, capsys):
+def test_fg_bring_to_foreground(capsys):
     """Test foreground command"""
-    # Ensure job is running
-    running_job.status = JobStatus.RUNNING
-    
-    with patch('src.execution.job_manager.JobManager.bring_to_foreground', return_value=0):
-        result = fg(str(running_job.id))
-        captured = capsys.readouterr()
+    # Patch update_job_status to prevent auto-marking as DONE
+    with patch('src.context.ShellContext.update_job_status'):
+        # Create a running job directly in the test
+        SHELL.jobs.clear()
+        job = Job(id=1, pgid=12345, command='sleep 100', status=JobStatus.RUNNING, processes=[12345])
+        SHELL.jobs[job.id] = job
         
-        assert running_job.command in captured.out
-        assert result == 0
+        try:
+            result = fg(str(job.id))
+            captured = capsys.readouterr()
+            
+            assert job.command in captured.out
+            assert result == 0
+        finally:
+            # Clean up
+            SHELL.jobs.clear()
 
 
 def test_cleanup_done_jobs():
