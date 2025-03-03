@@ -16,7 +16,7 @@ def export(*args: str) -> None:
         # Print all environment variables when no args provided
         for key, value in sorted(os.environ.items()):
             print(f"{key}={value}")
-        return
+        return True
 
     for arg in args:
         if '=' in arg:
@@ -37,6 +37,7 @@ def export(*args: str) -> None:
                 print(f"{arg}={os.environ[arg]}")
             else:
                 sys.stderr.write(f"export: {arg}: not found\n")
+    return True
 
 def unset(*args: str) -> None:
     """Remove environment variables
