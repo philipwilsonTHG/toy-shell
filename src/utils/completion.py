@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import sys
 import glob
 import readline
 from typing import List, Optional
@@ -17,9 +18,29 @@ class Completer:
     
     def _setup_completion(self):
         """Set up readline completion"""
+        # Set the completer function
         readline.set_completer(self._complete)
+        
+        # Set completion delimiter characters
         readline.set_completer_delims(' \t\n`!@#$%^&*()-=+[{]}\\|;:\'",<>?')
-        readline.parse_and_bind('tab: complete')
+        
+        # Configure readline completion behavior
+        readline.parse_and_bind("set editing-mode emacs")
+        readline.parse_and_bind("set completion-ignore-case on")
+        readline.parse_and_bind("set show-all-if-ambiguous on")
+        readline.parse_and_bind("set mark-symlinked-directories on")
+        
+        # Bind TAB key to completion
+        try:
+            # This is the macOS/BSD-specific binding
+            if sys.platform == 'darwin':
+                readline.parse_and_bind("bind ^I rl_complete") 
+            else:
+                # This is the Linux/GNU readline binding
+                readline.parse_and_bind("tab: complete")
+        except Exception:
+            # Fallback to basic binding if specific platform bindings fail
+            readline.parse_and_bind("tab: complete")
     
     def _complete(self, text: str, state: int) -> Optional[str]:
         """Readline completion function"""

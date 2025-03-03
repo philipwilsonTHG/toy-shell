@@ -28,11 +28,11 @@ class Shell:
             # Set up job control
             TerminalController.setup_job_control()
             
-            # Set up history
-            HistoryManager.init_history()
-            
-            # Set up completion
+            # First set up completion (this needs to configure readline)
             self.completer = Completer()
+            
+            # Then set up history (will use readline already configured by completer)
+            HistoryManager.init_history()
             
     def execute_line(self, line: str) -> Optional[int]:
         """Execute a line of input"""

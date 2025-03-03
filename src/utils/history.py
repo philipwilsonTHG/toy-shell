@@ -13,21 +13,18 @@ class HistoryManager:
     @staticmethod
     def init_history():
         """Initialize history management"""
-        # Configure readline
-        readline.parse_and_bind("set editing-mode emacs")
-        readline.parse_and_bind("set completion-ignore-case on")
-        readline.parse_and_bind("set show-all-if-ambiguous on")
-        readline.parse_and_bind("set mark-symlinked-directories on")
+        # Configure readline - initialize only what's needed for history
+        # (completion settings are handled by the Completer class)
         
-        # Key bindings
+        # Key bindings for history navigation
         readline.parse_and_bind('"\\C-r": reverse-search-history')
         readline.parse_and_bind('"\\C-s": forward-search-history')
         
-        # Arrow keys for history navigation - using escape sequences with double backslash
+        # Arrow keys for history navigation
         readline.parse_and_bind('"\\C-p": previous-history')    # Ctrl+P (same as up arrow)
         readline.parse_and_bind('"\\C-n": next-history')        # Ctrl+N (same as down arrow)
-        readline.parse_and_bind('up: previous-history')         # Up arrow alternative
-        readline.parse_and_bind('down: next-history')           # Down arrow alternative
+        readline.parse_and_bind('up: previous-history')         # Up arrow 
+        readline.parse_and_bind('down: next-history')           # Down arrow
         
         # Search with prefix 
         readline.parse_and_bind('"\\M-p": history-search-backward')  # Alt+P
@@ -36,14 +33,14 @@ class HistoryManager:
         # Line navigation and editing
         readline.parse_and_bind('"\\C-f": forward-char')       # Ctrl+F (same as right arrow)
         readline.parse_and_bind('"\\C-b": backward-char')      # Ctrl+B (same as left arrow)
-        readline.parse_and_bind('right: forward-char')         # Right arrow alternative
-        readline.parse_and_bind('left: backward-char')         # Left arrow alternative
-        readline.parse_and_bind('"\\C-a": beginning-of-line')
-        readline.parse_and_bind('"\\C-e": end-of-line')
-        readline.parse_and_bind('"\\C-k": kill-line')
-        readline.parse_and_bind('"\\C-u": unix-line-discard')
-        readline.parse_and_bind('"\\C-w": unix-word-rubout')
-        readline.parse_and_bind('"\\C-y": yank')
+        readline.parse_and_bind('right: forward-char')         # Right arrow 
+        readline.parse_and_bind('left: backward-char')         # Left arrow
+        readline.parse_and_bind('"\\C-a": beginning-of-line')  # Move to start of line
+        readline.parse_and_bind('"\\C-e": end-of-line')        # Move to end of line
+        readline.parse_and_bind('"\\C-k": kill-line')          # Kill to end of line
+        readline.parse_and_bind('"\\C-u": unix-line-discard')  # Kill whole line
+        readline.parse_and_bind('"\\C-w": unix-word-rubout')   # Kill word backward
+        readline.parse_and_bind('"\\C-y": yank')               # Paste killed text
         
         # Load history and register save on exit
         HistoryManager.load_history()
