@@ -12,16 +12,28 @@ def cd(newdir: Optional[str] = None) -> None:
     
     # Handle cd - to go to previous directory
     if newdir == "-":
-        if len(SHELL.cwd_history) < 2:
-            sys.stderr.write("cd: no previous directory\n")
+        # Check if OLDPWD environment variable exists
+        if "OLDPWD" in os.environ:
+            newdir = os.environ["OLDPWD"]
+            print(newdir)  # Print the directory we're changing to, like bash does
+        # Fallback to history if OLDPWD not set but we have history
+        elif len(SHELL.cwd_history) >= 2:
+            newdir = SHELL.cwd_history[-2]
+            print(newdir)  # Print the directory we're changing to
+        else:
+            sys.stderr.write("cd: OLDPWD not set\n")
             return
-        newdir = SHELL.cwd_history[-2]
     
     try:
         # Save current directory before changing
         olddir = os.getcwd()
         os.chdir(os.path.expanduser(newdir))
-        SHELL.cwd_history.append(olddir)
+        
+        # Set OLDPWD environment variable to the previous directory
+        os.environ["OLDPWD"] = olddir
+        
+        # Also maintain our history for fallback
+        SHELL.cwd_history.append(os.getcwd())  # Add the new directory, not olddir
         
         # Keep history at reasonable size
         if len(SHELL.cwd_history) > 20:

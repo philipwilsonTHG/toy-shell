@@ -30,7 +30,15 @@ class ShellContext:
     def __init__(self):
         self.jobs: Dict[int, Job] = {}
         self.next_job_id: int = 1
-        self.cwd_history: List[str] = [os.getcwd()]
+        
+        # Initialize current working directory tracking
+        current_dir = os.getcwd()
+        self.cwd_history: List[str] = [current_dir]
+        
+        # Initialize OLDPWD environment variable
+        if "OLDPWD" not in os.environ:
+            os.environ["OLDPWD"] = current_dir
+        
         self.interactive: bool = sys.stdin.isatty()
         self.debug: bool = False
         self.logger = self.setup_logging()
