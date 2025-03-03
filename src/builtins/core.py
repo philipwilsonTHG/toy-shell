@@ -21,8 +21,9 @@ def cd(newdir: Optional[str] = None) -> None:
             newdir = SHELL.cwd_history[-2]
             print(newdir)  # Print the directory we're changing to
         else:
-            sys.stderr.write("cd: OLDPWD not set\n")
-            return
+            newdir = '.'
+            # sys.stderr.write("cd: OLDPWD not set\n")
+            # return
     
     try:
         # Save current directory before changing
@@ -38,6 +39,8 @@ def cd(newdir: Optional[str] = None) -> None:
         # Keep history at reasonable size
         if len(SHELL.cwd_history) > 20:
             SHELL.cwd_history.pop(0)
+
+        return True
             
     except Exception as e:
         sys.stderr.write(f"cd: {newdir}: {e.strerror}\n")
