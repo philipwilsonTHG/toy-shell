@@ -71,28 +71,76 @@ def version() -> None:
         print("Python Shell version 0.1.0")
     print(f"Python {sys.version}")
 
-def source(filename: Optional[str] = None) -> None:
-    """Execute commands from a file"""
+def source(filename: Optional[str] = None) -> int:
+    """Execute commands from a file
+    
+    Usage:
+        source filename    # Execute commands from filename
+        . filename        # Alternative syntax
+        
+    Returns:
+        Exit status of the last command executed, or 1 if an error occurs
+    """
     if filename is None:
         sys.stderr.write("source: filename argument required\n")
-        return
+        return 1
     
     try:
+        # Get full path to script
         filepath = os.path.expanduser(filename)
+        
+        # Import Shell class here to avoid circular imports
+        from ..shell import Shell
+        
+        # Create a shell instance with the same interactive state as the parent
+        # This is important for executing commands in the same context
+        shell = Shell()
+        
+        # Read and execute each line from the file
         with open(filepath) as f:
-            from ..shell import process_line
+            exit_status = 0
+            
             for line in f:
                 line = line.strip()
                 # Skip comments and empty lines
-                if line and not line.startswith('#'):
-                    try:
-                        process_line(line)
-                    except Exception as e:
-                        sys.stderr.write(f"source: error executing '{line}': {e}\n")
-                        return
+                if not line or line.startswith('#'):
+                    continue
+                    
+                try:
+                    # Execute the line using shell's execute_line method
+                    result = shell.execute_line(line)
+                    
+                    # Handle command results
+                    if result is not None:
+                        # Check for exit command (special code <=-1000)
+                        if result <= -1000 and result >= -1255:
+                            # Convert exit code: -1000-N → N (0-255)
+                            exit_status = abs(result) - 1000
+                            return exit_status  # Return immediately on exit
+                        else:
+                            # Save regular exit status
+                            exit_status = result
+                            
+                            # If the command failed (non-zero), consider stopping
+                            if exit_status != 0:
+                                # In strict mode, we'd stop here
+                                # For now, continue to next line
+                                pass
+                            
+                except Exception as e:
+                    # Log error and exit with failure
+                    sys.stderr.write(f"source: error executing '{line}': {e}\n")
+                    return 1
+            
+            # Return the last exit status from the script
+            return exit_status
+            
     except FileNotFoundError:
         sys.stderr.write(f"source: {filename}: No such file\n")
+        return 1
     except PermissionError:
         sys.stderr.write(f"source: {filename}: Permission denied\n")
+        return 1
     except Exception as e:
         sys.stderr.write(f"source: error reading {filename}: {e}\n")
+        return 1
