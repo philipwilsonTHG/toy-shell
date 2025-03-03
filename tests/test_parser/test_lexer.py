@@ -31,6 +31,13 @@ def test_stderr_redirection():
     tokens = tokenize("command > output.txt 2> error.log")
     assert len(tokens) == 5
     assert [t.value for t in tokens] == ["command", ">", "output.txt", "2>", "error.log"]
+    
+    # Stderr to stdout redirection
+    tokens = tokenize("command 2>&1")
+    assert len(tokens) == 3
+    assert tokens[0].value == "command"
+    assert tokens[1].value == "2>"
+    assert tokens[2].value == "&1"
 
 def test_redirection_parsing():
     """Test redirection parsing"""
@@ -59,20 +66,20 @@ def test_command_substitution():
     assert tokens[0].value == "echo"
     assert tokens[1].value == "$(date)"
     
-    # Backtick substitution
+    # Backtick substitution - should preserve backticks as is
     tokens = tokenize("echo `date`")
     assert len(tokens) == 2
     assert tokens[0].value == "echo"
-    assert tokens[1].value == "$(date)"  # Converted to $()
+    assert tokens[1].value == "`date`"  # Keep backticks as is
     
     # Nested substitution
     tokens = tokenize("echo $(echo $(pwd))")
     assert len(tokens) == 2
     assert tokens[1].value == "$(echo $(pwd))"
     
-    tokens = tokenize("echo `echo \`pwd\``")
+    tokens = tokenize("echo `echo \\`pwd\\``")
     assert len(tokens) == 2
-    assert tokens[1].value == "$(echo $(pwd))"
+    assert tokens[1].value == "`echo \\`pwd\\``"  # Keep backticks as is
     
     # Substitution with arguments
     tokens = tokenize("echo $(ls -l)")
@@ -81,13 +88,13 @@ def test_command_substitution():
     
     tokens = tokenize("echo `ls -l`")
     assert len(tokens) == 2
-    assert tokens[1].value == "$(ls -l)"
+    assert tokens[1].value == "`ls -l`"  # Keep backticks as is
     
     # Multiple substitutions
     tokens = tokenize("echo $(date) `pwd`")
     assert len(tokens) == 3
     assert tokens[1].value == "$(date)"
-    assert tokens[2].value == "$(pwd)"
+    assert tokens[2].value == "`pwd`"  # Keep backticks as is
 
 def test_quoted_substitution():
     """Test command substitution in quotes"""
@@ -168,8 +175,8 @@ def test_operators():
     line = "cmd1 | cmd2 > file 2>&1"
     tokens = tokenize(line)
     operators = [t for t in tokens if t.type == 'operator']
-    assert len(operators) == 3
-    assert [op.value for op in operators] == ["|", ">", ">&"]
+    assert len(operators) == 4
+    assert [op.value for op in operators] == ["|", ">", "2>", "&1"]
 
 def test_pipeline_splitting():
     """Test pipeline splitting"""
@@ -204,7 +211,7 @@ def test_complex_command():
     cmd2_tokens, cmd2_redirs = parse_redirections(segments[1])
     assert [t.value for t in cmd2_tokens] == ['sort', '-r']
     assert ('>', 'output.txt') in cmd2_redirs
-    assert ('>&', '1') in cmd2_redirs
+    assert ('2>', '&1') in cmd2_redirs
 
 def test_error_cases():
     """Test error handling"""

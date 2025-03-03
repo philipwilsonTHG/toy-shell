@@ -25,35 +25,7 @@ def tokenize(line: str) -> List[Token]:
     - Operator recognition
     - Comment handling
     """
-    # Special handling for specific test cases
-    if line == 'echo "Current date: $(date)"':
-        return [
-            Token('echo', 'word'),
-            Token('"Current date: $(date)"', 'word')
-        ]
-    
-    if line == "echo $date)":
-        return [
-            Token('echo', 'word'),
-            Token('$', 'word'),
-            Token('date)', 'word')
-        ]
-    
-    if line == 'grep "test phrase" file.txt | sort -r > output.txt 2>&1':
-        part1 = [
-            Token('grep', 'word'),
-            Token('"test phrase"', 'word'),
-            Token('file.txt', 'word')
-        ]
-        part2 = [
-            Token('sort', 'word'),
-            Token('-r', 'word'),
-            Token('>', 'operator'),
-            Token('output.txt', 'word'),
-            Token('>&', 'operator'),
-            Token('1', 'word')
-        ]
-        return part1 + [Token('|', 'operator')] + part2
+
     
     tokens = []
     current = []
@@ -71,88 +43,115 @@ def tokenize(line: str) -> List[Token]:
         # Handle comments
         if char == '#' and not (in_single_quote or in_double_quote):
             break
-        
-        # Special case for escaped backticks
-        if char == '\\' and i + 1 < len(line) and line[i + 1] == '`' and line == "echo \\`date\\`":
-            # For the test_invalid_substitution test
-            if current:
-                tokens.append(Token(''.join(current)))
-            tokens.append(Token('\\`date\\`', 'word'))  
-            return tokens
             
         # Handle escape sequences
         if escaped:
+            # When we see an escaped character, preserve both the backslash and the character
+            # Add the backslash that we skipped earlier
+            current.append('\\')
+            # Add the current character
             current.append(char)
             escaped = False
             i += 1
             continue
         
         if char == '\\':
+            # We found a backslash - set the escaped flag and continue to the next character
+            # We'll handle the backslash in the next iteration
             escaped = True
             i += 1
             continue
         
         # Handle quotes
         if char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
-            current.append(char)
+            # If we're closing a single quote, make sure we properly tokenize the full quoted string
+            if in_single_quote:
+                # Ending a single quote - add the closing quote and complete the token
+                current.append(char)
+                tokens.append(Token(''.join(current), 'word'))
+                current = []
+                in_single_quote = False
+            else:
+                # Starting a single quote - start a new token if needed
+                if current:
+                    tokens.append(Token(''.join(current), 'word'))
+                    current = []
+                current.append(char)
+                in_single_quote = True
             i += 1
             continue
             
         if char == '"' and not in_single_quote:
-            in_double_quote = not in_double_quote
-            current.append(char)
+            # If we're closing a double quote, make sure we properly tokenize the full quoted string
+            if in_double_quote:
+                # Ending a double quote - add the closing quote and complete the token
+                current.append(char)
+                tokens.append(Token(''.join(current), 'word'))
+                current = []
+                in_double_quote = False
+            else:
+                # Starting a double quote - start a new token if needed
+                if current:
+                    tokens.append(Token(''.join(current), 'word'))
+                    current = []
+                current.append(char)
+                in_double_quote = True
             i += 1
             continue
         
-        # Handle $() command substitution
-        if char == '$' and i + 1 < len(line) and line[i + 1] == '(':
-            if in_single_quote:
-                # Inside single quotes, treat as literal text
+        # Handle $ character
+        if char == '$':
+            # Inside quotes, treat as literal text
+            if in_single_quote or in_double_quote:
                 current.append(char)
                 i += 1
                 continue
-            
-            if current:
-                tokens.append(Token(''.join(current)))
-                current = []
-            
-            # Find matching closing parenthesis
-            paren_count = 1
-            cmd_start = i + 2
-            cmd_end = cmd_start
-            sub_escaped = False
-            
-            while cmd_end < len(line) and paren_count > 0:
-                if sub_escaped:
-                    sub_escaped = False
+                
+            # Handle $() command substitution
+            if i + 1 < len(line) and line[i + 1] == '(':
+                if current:
+                    tokens.append(Token(''.join(current)))
+                    current = []
+                
+                # Find matching closing parenthesis
+                paren_count = 1
+                cmd_start = i + 2
+                cmd_end = cmd_start
+                sub_escaped = False
+                
+                while cmd_end < len(line) and paren_count > 0:
+                    if sub_escaped:
+                        sub_escaped = False
+                        cmd_end += 1
+                        continue
+                    
+                    if line[cmd_end] == '(' and not sub_escaped:
+                        paren_count += 1
+                    elif line[cmd_end] == ')' and not sub_escaped:
+                        paren_count -= 1
+                    elif line[cmd_end] == '\\':
+                        sub_escaped = True
+                    
                     cmd_end += 1
-                    continue
+                    
+                    if cmd_end >= len(line) and paren_count > 0:
+                        raise ValueError("Unterminated command substitution")
                 
-                if line[cmd_end] == '(' and not sub_escaped:
-                    paren_count += 1
-                elif line[cmd_end] == ')' and not sub_escaped:
-                    paren_count -= 1
-                elif line[cmd_end] == '\\':
-                    sub_escaped = True
+                cmd_end -= 1  # adjust for the last increment
                 
-                cmd_end += 1
-                
-                if cmd_end >= len(line) and paren_count > 0:
-                    raise ValueError("Unterminated command substitution")
-            
-            cmd_end -= 1  # adjust for the last increment
-            
-            # Keep substitution as a single token
-            if in_double_quote:
-                current.append(line[i:cmd_end + 1])
-            else:
                 tokens.append(Token(line[i:cmd_end + 1], 'substitution'))
-            
-            i = cmd_end + 1
+                i = cmd_end + 1
+            else:
+                # For standalone $ character (not followed by valid substitution)
+                if current:
+                    tokens.append(Token(''.join(current)))
+                    current = []
+                
+                # Add $ as its own token
+                tokens.append(Token('$', 'word'))
+                i += 1
             continue
-        
-        # Handle backtick command substitution
+# Handle backtick command substitution
         if char == '`' and not in_single_quote:
             if in_double_quote:
                 # Inside double quotes, keep backticks as is
@@ -183,27 +182,16 @@ def tokenize(line: str) -> List[Token]:
                 cmd_end += 1
             
             if cmd_end >= len(line):
-                # Handle unclosed backtick here to match test expectations
-                if line == "echo `date":
-                    if current:
-                        tokens.append(Token(''.join(current)))
-                    tokens.append(Token('`date', 'word'))
-                    return tokens
-                else:
-                    if current:
-                        tokens.append(Token(''.join(current)))
-                    tokens.append(Token('`' + line[cmd_start:], 'word'))
+                # Handle unclosed backtick - preserve as is in output
+                if current:
+                    tokens.append(Token(''.join(current)))
+                tokens.append(Token('`' + line[cmd_start:], 'word'))
                 i = len(line)
                 continue
                 
-            # Convert to $() format
-            cmd = line[cmd_start:cmd_end]
-            
-            # Handle nested backticks for test cases
-            if cmd == 'echo \\`pwd\\`':
-                tokens.append(Token("$(echo $(pwd))", 'substitution'))
-            else:
-                tokens.append(Token(f"$({cmd})", 'substitution'))
+            # Preserve backticks as is (don't convert to $())
+            cmd = line[i:cmd_end+1]  # Include both backticks
+            tokens.append(Token(cmd, 'substitution'))
                 
             i = cmd_end + 1
             continue
@@ -218,10 +206,16 @@ def tokenize(line: str) -> List[Token]:
             next_char = line[i + 1]
             
             if next_char == '>' and i + 2 < len(line) and line[i + 2] == '&':
-                # Handle 2>&1 case
-                tokens.append(Token('>&', 'operator'))  # Match the expected format in the test
-                tokens.append(Token('1', 'word'))  # Make sure it's a separate token
-                i += 3
+                # Handle 2>&1 case - split into 2> and &1 tokens for bash compatibility
+                tokens.append(Token('2>', 'operator'))
+                
+                # Handle the &1 part as its own token
+                if i + 3 < len(line) and line[i + 3] == '1':
+                    tokens.append(Token('&1', 'operator'))
+                    i += 4
+                else:
+                    tokens.append(Token('&', 'operator'))
+                    i += 3
             elif i + 2 < len(line) and line[i + 2] == '>':  # Handle 2>>
                 tokens.append(Token('2>>', 'operator'))
                 i += 3
@@ -269,7 +263,7 @@ def tokenize(line: str) -> List[Token]:
         raise ValueError("Unterminated single quote")
     if in_double_quote:
         raise ValueError("Unterminated double quote")
-
+    
     return tokens
 
 def remove_quotes(token: str) -> str:
@@ -282,12 +276,7 @@ def remove_quotes(token: str) -> str:
 def split_pipeline(tokens: List[Token]) -> List[List[Token]]:
     """Split tokens into pipeline segments"""
     # For the specific test case in test_pipeline_splitting
-    if len(tokens) == 7 and tokens[0].value == "cmd1" and tokens[1].value == "arg1" and tokens[2].value == "|":
-        return [
-            [tokens[0], tokens[1]],  # cmd1 arg1
-            [tokens[3], tokens[4]],  # cmd2 arg2
-            [tokens[6]]             # cmd3
-        ]
+
     
     segments = []
     current = []
@@ -314,6 +303,9 @@ def is_redirection(token: Token) -> bool:
         return True
     # Match stderr redirections
     if token.value in {'2>', '2>>'}:
+        return True
+    # Handle &1 (file descriptor reference) as part of a redirection
+    if token.value == '&1':
         return True
     return False
 
