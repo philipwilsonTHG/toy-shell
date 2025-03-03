@@ -48,6 +48,27 @@ class Shell:
                 print(f"Python Shell version {__version__}")
                 print(f"Python {sys.version}")
                 return 0
+            
+            # Handle history execution with ! prefix
+            if line.startswith('!'):
+                if len(line) > 1:
+                    # If it's a number, execute that history entry
+                    history_num_str = line[1:]
+                    try:
+                        history_num = int(history_num_str)
+                        history_cmd = HistoryManager.get_command_by_number(history_num)
+                        if history_cmd:
+                            print(history_cmd)  # Echo the command
+                            return self.execute_line(history_cmd)
+                        else:
+                            print(f"!{history_num_str}: event not found", file=sys.stderr)
+                            return 1
+                    except ValueError:
+                        print(f"!{history_num_str}: event not found", file=sys.stderr)
+                        return 1
+                else:
+                    print("!: event not found", file=sys.stderr)
+                    return 1
                 
             # Handle history command directly to prevent tokenizing and
             # attempting to execute as a normal command after the builtin

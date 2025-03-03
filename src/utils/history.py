@@ -47,6 +47,16 @@ class HistoryManager:
         atexit.register(HistoryManager.save_history)
     
     @staticmethod
+    def get_command_by_number(num: int) -> Optional[str]:
+        """Get a command from history by its number"""
+        try:
+            if 1 <= num <= readline.get_current_history_length():
+                return readline.get_history_item(num)
+            return None
+        except (ValueError, IndexError):
+            return None
+    
+    @staticmethod
     def load_history():
         """Load history from file"""
         try:

@@ -12,6 +12,8 @@ def history(*args: str) -> None:
         history N      # Display last N entries
         history -c     # Clear history
         history -d N   # Delete history entry N
+        
+    Note: Use !N to execute command number N from history
     """
     if not args:
         # Display all history with line numbers
