@@ -67,11 +67,17 @@ def expand_variables(text: str) -> str:
     return text
 
 def expand_command_substitution(text: str) -> str:
-    """Expand $(command) substitutions in text"""
-    if not text.startswith('$(') or not text.endswith(')'):
+    """Expand $(command) and `command` substitutions in text"""
+    
+    # Handle $(command) format
+    if text.startswith('$(') and text.endswith(')'):
+        command = text[2:-1].strip()
+    # Handle `command` format
+    elif text.startswith('`') and text.endswith('`'):
+        command = text[1:-1].strip()
+    else:
         return text
     
-    command = text[2:-1].strip()
     if not command:
         return ''
     
@@ -84,6 +90,16 @@ def expand_command_substitution(text: str) -> str:
             return inner_result
         
         command = re.sub(nested_pattern, replace_nested, command)
+    
+    # Also handle nested backticks
+    nested_backtick_pattern = r'`([^`]*(?:\\`[^`]*)*)`'
+    while re.search(nested_backtick_pattern, command):
+        def replace_nested_backtick(match):
+            inner_cmd = match.group(0)
+            inner_result = expand_command_substitution(inner_cmd)
+            return inner_result
+        
+        command = re.sub(nested_backtick_pattern, replace_nested_backtick, command)
     
     try:
         result = subprocess.run(
@@ -150,6 +166,13 @@ def expand_all(text: str) -> str:
             def expand_cmd(match):
                 return expand_command_substitution(match.group(0))
             result = re.sub(cmd_pattern, expand_cmd, result)
+        
+        # Handle backtick substitution inside double quotes
+        backtick_pattern = r'`([^`]*(?:\\`[^`]*)*)`'
+        while re.search(backtick_pattern, result):
+            def expand_backtick(match):
+                return expand_command_substitution(match.group(0))
+            result = re.sub(backtick_pattern, expand_backtick, result)
             
         return result
     
@@ -162,6 +185,13 @@ def expand_all(text: str) -> str:
         def expand_cmd(match):
             return expand_command_substitution(match.group(0))
         result = re.sub(cmd_pattern, expand_cmd, result)
+    
+    # Find and expand all backtick substitutions
+    backtick_pattern = r'`([^`]*(?:\\`[^`]*)*)`'
+    while re.search(backtick_pattern, result):
+        def expand_backtick(match):
+            return expand_command_substitution(match.group(0))
+        result = re.sub(backtick_pattern, expand_backtick, result)
     
     # Tilde expansion after variable and command substitution
     result = expand_tilde(result)

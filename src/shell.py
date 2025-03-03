@@ -120,17 +120,27 @@ def main():
     """Shell entry point"""
     shell = Shell()
     
-    # Handle script file
+    # Handle command line arguments
     if len(sys.argv) > 1:
-        script_path = sys.argv[1]
-        try:
-            with open(script_path) as f:
-                for line in f:
-                    shell.execute_line(line)
-            return 0
-        except Exception as e:
-            print(f"Error running script {script_path}: {e}", file=sys.stderr)
-            return 1
+        # Handle -c option to execute a command
+        if sys.argv[1] == "-c" and len(sys.argv) > 2:
+            command = sys.argv[2]
+            try:
+                return shell.execute_line(command) or 0
+            except Exception as e:
+                print(f"Error running command: {e}", file=sys.stderr)
+                return 1
+        # Handle script file
+        else:
+            script_path = sys.argv[1]
+            try:
+                with open(script_path) as f:
+                    for line in f:
+                        shell.execute_line(line)
+                return 0
+            except Exception as e:
+                print(f"Error running script {script_path}: {e}", file=sys.stderr)
+                return 1
     
     # Interactive mode
     return shell.run()
