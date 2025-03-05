@@ -2,7 +2,12 @@
 
 import sys
 from typing import List, Optional, Tuple, Dict, Any
-from . import Token, tokenize, parse_redirections
+from .new.token_types import Token, TokenType
+from .new.lexer import tokenize
+from .new.redirection import RedirectionParser
+
+# For compatibility with existing code
+parse_redirections = RedirectionParser.parse_redirections
 from .ast import (
     Node, CommandNode, PipelineNode, IfNode, WhileNode, 
     ForNode, CaseNode, FunctionNode, ListNode, CaseItem
@@ -149,7 +154,7 @@ class Parser:
             token = self.peek()
             
             # End of command
-            if token.type == 'operator' and token.value in {';', '&'}:
+            if token.token_type == TokenType.OPERATOR and token.value in {';', '&'}:
                 self.advance()  # Consume the token
                 if token.value == '&':
                     has_background = True
@@ -159,7 +164,7 @@ class Parser:
                 break
                 
             # Pipeline character
-            if token.type == 'operator' and token.value == '|':
+            if token.token_type == TokenType.OPERATOR and token.value == '|':
                 self.advance()  # Consume the token
                 if cmd_tokens:
                     segments.append(cmd_tokens)
@@ -169,7 +174,7 @@ class Parser:
                 continue
             
             # Keywords that indicate end of command
-            if token.type == 'keyword' and token.value in {'then', 'else', 'elif', 'fi', 'do', 'done', 'esac'}:
+            if token.token_type == TokenType.KEYWORD and token.value in {'then', 'else', 'elif', 'fi', 'do', 'done', 'esac'}:
                 if cmd_tokens:
                     segments.append(cmd_tokens)
                 break
@@ -353,7 +358,7 @@ class Parser:
         # for was already consumed
         
         # Get variable name
-        if self.is_at_end() or self.peek().type != 'word':
+        if self.is_at_end() or self.peek().token_type != TokenType.WORD:
             raise ParseError("Expected variable name after 'for'")
         
         variable = self.advance().value
@@ -369,7 +374,7 @@ class Parser:
         while not self.is_at_end() and not self.check('keyword', 'do'):
             token = self.advance()
             # Skip separators like semicolons
-            if token.type == 'operator' and token.value == ';':
+            if token.token_type == TokenType.OPERATOR and token.value == ';':
                 continue
             words.append(token.value)
         
@@ -440,7 +445,7 @@ class Parser:
                 pattern = pattern_token
                 
                 # Expect )
-                if self.is_at_end() or not (self.peek().type == 'operator' and self.peek().value == ')'):
+                if self.is_at_end() or not (self.peek().token_type == TokenType.OPERATOR and self.peek().value == ')'):
                     raise ParseError("Expected ')' after pattern in case statement")
                 
                 self.advance()  # Consume ')'
@@ -448,7 +453,7 @@ class Parser:
             # Parse action (commands until ;; or esac)
             action_statements = []
             while not self.is_at_end() and not self.check('keyword', 'esac') and not (
-                   self.peek().type == 'operator' and self.peek().value == ';'):
+                   self.peek().token_type == TokenType.OPERATOR and self.peek().value == ';'):
                 action_statements.append(self.parse_command())
                 self.skip_separators()
             
@@ -467,9 +472,9 @@ class Parser:
                 break
                 
             # Skip ;; pattern separator
-            if self.peek().type == 'operator' and self.peek().value == ';':
+            if self.peek().token_type == TokenType.OPERATOR and self.peek().value == ';':
                 self.advance()  # First ;
-                if not self.is_at_end() and self.peek().type == 'operator' and self.peek().value == ';':
+                if not self.is_at_end() and self.peek().token_type == TokenType.OPERATOR and self.peek().value == ';':
                     self.advance()  # Second ;
         
         if self.is_at_end():
@@ -485,28 +490,28 @@ class Parser:
         # function was already consumed
         
         # Get function name
-        if self.is_at_end() or self.peek().type != 'word':
+        if self.is_at_end() or self.peek().token_type != TokenType.WORD:
             raise ParseError("Expected function name")
         
         name = self.advance().value
         
         # Check for optional ()
-        if not self.is_at_end() and self.peek().type == 'operator' and self.peek().value == '(':
+        if not self.is_at_end() and self.peek().token_type == TokenType.OPERATOR and self.peek().value == '(':
             self.advance()  # Consume (
             
-            if self.is_at_end() or self.peek().type != 'operator' or self.peek().value != ')':
+            if self.is_at_end() or self.peek().token_type != TokenType.OPERATOR or self.peek().value != ')':
                 raise ParseError("Expected ')' after '(' in function definition")
             
             self.advance()  # Consume )
         
         # Get the function body - can be a compound statement or a single command
         # First check for compound statement wrapped in { }
-        if not self.is_at_end() and self.peek().type == 'operator' and self.peek().value == '{':
+        if not self.is_at_end() and self.peek().token_type == TokenType.OPERATOR and self.peek().value == '{':
             self.advance()  # Consume {
             
             # Parse body statements until }
             body_statements = []
-            while not self.is_at_end() and not (self.peek().type == 'operator' and self.peek().value == '}'):
+            while not self.is_at_end() and not (self.peek().token_type == TokenType.OPERATOR and self.peek().value == '}'):
                 body_statements.append(self.parse_command())
                 self.skip_separators()
                 
@@ -529,15 +534,24 @@ class Parser:
     
     def skip_separators(self):
         """Skip command separators (;)"""
-        while not self.is_at_end() and self.peek().type == 'operator' and self.peek().value == ';':
+        while not self.is_at_end() and self.peek().token_type == TokenType.OPERATOR and self.peek().value == ';':
             self.advance()
     
-    def match(self, token_type: str, value: str = None) -> bool:
+    def match(self, token_type_str: str, value: str = None) -> bool:
         """Check if current token matches and advance if it does"""
         if self.is_at_end():
             return False
+        
+        # Convert string type to TokenType enum
+        token_type = TokenType.WORD
+        if token_type_str == 'operator':
+            token_type = TokenType.OPERATOR
+        elif token_type_str == 'keyword':
+            token_type = TokenType.KEYWORD
+        elif token_type_str == 'substitution':
+            token_type = TokenType.SUBSTITUTION
             
-        if self.peek().type != token_type:
+        if self.peek().token_type != token_type:
             return False
             
         if value is not None and self.peek().value != value:
@@ -546,12 +560,21 @@ class Parser:
         self.advance()
         return True
     
-    def check(self, token_type: str, value: str = None) -> bool:
+    def check(self, token_type_str: str, value: str = None) -> bool:
         """Check if current token matches without advancing"""
         if self.is_at_end():
             return False
+        
+        # Convert string type to TokenType enum
+        token_type = TokenType.WORD
+        if token_type_str == 'operator':
+            token_type = TokenType.OPERATOR
+        elif token_type_str == 'keyword':
+            token_type = TokenType.KEYWORD
+        elif token_type_str == 'substitution':
+            token_type = TokenType.SUBSTITUTION
             
-        if self.peek().type != token_type:
+        if self.peek().token_type != token_type:
             return False
             
         if value is not None and self.peek().value != value:

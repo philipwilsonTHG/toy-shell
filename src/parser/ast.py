@@ -2,7 +2,7 @@
 
 from typing import List, Dict, Optional, Any, Callable, Union
 from abc import ABC, abstractmethod
-from .new.compatibility import Token
+from .new.token_types import Token
 
 class ASTVisitor(ABC):
     """Base visitor class for AST traversal"""

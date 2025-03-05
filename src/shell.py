@@ -124,7 +124,7 @@ class Shell:
             if self.debug_mode:
                 print("[DEBUG] Raw tokens:", file=sys.stderr)
                 for i, token in enumerate(tokens):
-                    print(f"  Token {i}: '{token.value}' ({token.type})", file=sys.stderr)
+                    print(f"  Token {i}: '{token.value}' ({token.token_type})", file=sys.stderr)
                 
                 # Debug the redirections
                 from .parser.new.redirection import RedirectionParser

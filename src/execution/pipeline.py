@@ -21,7 +21,7 @@ class TokenExpander:
         """Expand a single token into a list of strings"""
         expanded_tokens = []
         
-        if token.type == 'substitution':
+        if token.token_type == TokenType.SUBSTITUTION:
             # Handle command substitution
             expanded = expand_command_substitution(token.value)
             if expanded:
