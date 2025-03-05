@@ -118,6 +118,11 @@ class Shell:
             
             # Tokenize and execute
             tokens = tokenize(line)
+            
+            # Debug output
+            if self.debug_mode:
+                print(f"[DEBUG] Raw tokens: {tokens}", file=sys.stderr)
+                
             result = self.pipeline_executor.execute_pipeline(tokens, background)
             
             # Ensure we return a value, not None (which causes shell to exit)

@@ -9,11 +9,14 @@ class Token:
     def __init__(self, value: str, token_type: str = 'word'):
         self.value = value
         self.type = token_type
+        self.quoted = False  # Track if this token was originally quoted
     
     def __str__(self) -> str:
         return self.value
     
     def __repr__(self) -> str:
+        if hasattr(self, 'quoted') and self.quoted:
+            return f"Token({self.value!r}, {self.type!r}, quoted=True)"
         return f"Token({self.value!r}, {self.type!r})"
 
 # Define shell keywords
@@ -39,7 +42,7 @@ def tokenize(line: str) -> List[Token]:
     
     Handles:
     - Word splitting
-    - Quote handling
+    - Quote handling (preserving quote information)
     - Operator recognition
     - Comment handling
     """
@@ -86,7 +89,9 @@ def tokenize(line: str) -> List[Token]:
             if in_single_quote:
                 # Ending a single quote - add the closing quote and complete the token
                 current.append(char)
-                tokens.append(Token(''.join(current), 'word'))
+                token = Token(''.join(current), 'word')
+                token.quoted = True  # Mark as a quoted token
+                tokens.append(token)
                 current = []
                 in_single_quote = False
             else:
@@ -104,7 +109,9 @@ def tokenize(line: str) -> List[Token]:
             if in_double_quote:
                 # Ending a double quote - add the closing quote and complete the token
                 current.append(char)
-                tokens.append(Token(''.join(current), 'word'))
+                token = Token(''.join(current), 'word')
+                token.quoted = True  # Mark as a quoted token
+                tokens.append(token)
                 current = []
                 in_double_quote = False
             else:

@@ -26,11 +26,20 @@ class TokenExpander:
             if expanded:
                 expanded_tokens.extend(expanded.split())
         else:
+            # Check if the token is quoted first before any other expansion
+            is_double_quoted = token.value.startswith('"') and token.value.endswith('"')
+            is_single_quoted = token.value.startswith("'") and token.value.endswith("'")
+            
             # Handle other expansions including variables
             expanded = expand_all(token.value)
             
-            # Handle wildcards
-            if '*' in expanded or '?' in expanded:
+            # For debugging
+            if os.environ.get('DEBUG_EXPANSION'):
+                print(f"[EXP] Token: '{token.value}' → '{expanded}' (dq: {is_double_quoted}, sq: {is_single_quoted})", 
+                      file=sys.stderr)
+            
+            # Handle wildcards (but not for quoted strings)
+            if not (is_double_quoted or is_single_quoted) and ('*' in expanded or '?' in expanded):
                 import glob
                 matches = glob.glob(expanded)
                 if matches:
@@ -38,11 +47,16 @@ class TokenExpander:
                 else:
                     expanded_tokens.append(expanded)
             else:
-                # Handle variables properly
-                if ' ' in expanded:
-                    expanded_tokens.extend(expanded.split())
-                else:
+                # For quoted strings, preserve the entire string as one token
+                # even if it contains spaces
+                if (is_double_quoted or is_single_quoted):
                     expanded_tokens.append(expanded)
+                else:
+                    # For non-quoted strings, handle variable expansion and word splitting
+                    if ' ' in expanded:
+                        expanded_tokens.extend(expanded.split())
+                    else:
+                        expanded_tokens.append(expanded)
                 
         return expanded_tokens
     
@@ -50,8 +64,20 @@ class TokenExpander:
     def expand_tokens(tokens: List[Token]) -> List[str]:
         """Expand multiple tokens into a list of strings"""
         expanded_tokens = []
+        
         for token in tokens:
-            expanded_tokens.extend(TokenExpander.expand_token(token))
+            # Check if this is a quoted token that should be preserved whole
+            is_quoted = (token.value.startswith('"') and token.value.endswith('"')) or \
+                       (token.value.startswith("'") and token.value.endswith("'"))
+                       
+            if is_quoted:
+                # For quoted tokens, strip quotes and add as a single token
+                from ..parser.quotes import strip_quotes
+                expanded_tokens.append(strip_quotes(token.value))
+            else:
+                # For normal tokens, use standard expansion which may split on spaces
+                expanded_tokens.extend(TokenExpander.expand_token(token))
+                
         return expanded_tokens
 
 
@@ -129,8 +155,18 @@ class PipelineExecutor:
             # Apply redirections
             self.redirection_handler.apply_redirections(redirections)
             
+            # Process arguments - make sure we don't split quoted arguments with spaces
+            processed_args = []
+            for i, arg in enumerate(args):
+                # Add processed argument
+                processed_args.append(arg)
+                
+                # For debugging
+                if os.environ.get('DEBUG_SHELL'):
+                    print(f"[SHELL DEBUG] Arg {i}: '{arg}'", file=sys.stderr)
+            
             # Execute command
-            os.execvp(cmd, args)
+            os.execvp(cmd, processed_args)
         except Exception as e:
             print(f"Failed to execute {cmd}: {e}", file=sys.stderr)
             os._exit(1)
@@ -158,9 +194,64 @@ class PipelineExecutor:
             cmd_tokens, redirections = parse_redirections(segment)
             if not cmd_tokens:
                 continue
+                
+            # Debug output for tokens
+            if os.environ.get('DEBUG_TOKENS'):
+                print("[DEBUG] Raw tokens before expansion:", file=sys.stderr)
+                for j, tok in enumerate(cmd_tokens):
+                    print(f"  Token {j}: {repr(tok.value)} ({tok.type})", file=sys.stderr)
             
-            # Expand command and arguments
-            expanded_tokens = self.token_expander.expand_tokens(cmd_tokens)
+            # Manually handle token expansion with proper quote handling
+            expanded_tokens = []
+            for token in cmd_tokens:
+                # For command substitution, handle normally
+                if token.type == 'substitution':
+                    expanded = expand_command_substitution(token.value)
+                    if expanded:
+                        expanded_tokens.extend(expanded.split())
+                    continue
+                    
+                # Check if this is a quoted string or has the quoted attribute
+                has_quotes = (token.value.startswith('"') and token.value.endswith('"')) or \
+                            (token.value.startswith("'") and token.value.endswith("'"))
+                was_quoted = hasattr(token, 'quoted') and token.quoted
+                
+                if has_quotes or was_quoted:
+                    # Get the value, stripping quotes if needed
+                    if has_quotes:
+                        from ..parser.quotes import strip_quotes
+                        value = strip_quotes(token.value)
+                    else:
+                        value = token.value
+                    
+                    # If it was in double quotes, we still need to expand variables
+                    if token.value.startswith('"'):
+                        from ..parser.expander import expand_variables
+                        value = expand_variables(value)
+                    
+                    # Debug output
+                    if os.environ.get('DEBUG_TOKENS'):
+                        print(f"[TOKEN] Preserving quoted token: '{value}'", file=sys.stderr)
+                    
+                    # Add as a single token, preserving spaces
+                    expanded_tokens.append(value)
+                else:
+                    # For normal tokens, use standard expansion which may split tokens
+                    expanded = expand_all(token.value)
+                    
+                    # Handle wildcard expansion for unquoted tokens
+                    if '*' in expanded or '?' in expanded:
+                        import glob
+                        matches = glob.glob(expanded)
+                        if matches:
+                            expanded_tokens.extend(sorted(matches))
+                            continue
+                            
+                    # Handle word splitting
+                    if ' ' in expanded:
+                        expanded_tokens.extend(expanded.split())
+                    else:
+                        expanded_tokens.append(expanded)
             
             if not expanded_tokens:
                 continue

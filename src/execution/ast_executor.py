@@ -190,8 +190,23 @@ class ASTExecutor(ASTVisitor):
         tokens.append(Token(expanded_command, 'word'))
         
         for arg in node.args[1:]:
+            # Check if we need to preserve spaces for quotes
+            is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
+            
+            # Expand the argument
             expanded_arg = self.expand_word(arg)
-            tokens.append(Token(expanded_arg, 'word'))
+            
+            # For debugging
+            if self.debug_mode:
+                print(f"[DEBUG] Processing arg: '{arg}' => '{expanded_arg}' (quoted: {is_quoted_arg})", file=sys.stderr)
+            
+            # Create a special token attribute to mark quoted arguments    
+            token = Token(expanded_arg, 'word')
+            if is_quoted_arg:
+                # Add attribute to token to track that it came from a quoted string
+                token.quoted = True
+            
+            tokens.append(token)
             
         # Add redirections with variable expansion
         for redir_op, redir_target in node.redirections:

@@ -200,7 +200,14 @@ class Parser:
             
             # Extract command name and arguments
             cmd_name = cmd_tokens[0].value
-            args = [token.value for token in cmd_tokens]
+            
+            # Process arguments for quoting
+            from .quotes import is_quoted, strip_quotes
+            args = []
+            for token in cmd_tokens:
+                token_value = token.value
+                # If token is quoted, strip quotes before adding to args
+                args.append(token_value)
             
             # Create command node
             command_nodes.append(CommandNode(cmd_name, args, redirections))
