@@ -18,8 +18,9 @@ from .execution.job_manager import JobManager
 class Shell:
     """Main shell implementation"""
     
-    def __init__(self):
+    def __init__(self, debug_mode=False):
         self.interactive = sys.stdin.isatty()
+        self.debug_mode = debug_mode
         self.config_manager = ConfigManager()
         self.job_manager = JobManager()
         self.pipeline_executor = PipelineExecutor(self.interactive)
@@ -78,6 +79,38 @@ class Shell:
                 history(*args)
                 return 0
             
+            # Try to parse using the AST parser
+            if not hasattr(self, 'parser'):
+                from .parser.parser import Parser
+                self.parser = Parser()
+                
+            if not hasattr(self, 'ast_executor'):
+                from .execution.ast_executor import ASTExecutor
+                self.ast_executor = ASTExecutor(self.interactive, self.debug_mode)
+            
+            # Check if we have an incomplete parse from a previous line
+            if self.parser.is_incomplete():
+                # Use PS2 for continuation prompt
+                node = self.parser.parse(line)
+                if node:
+                    # Successfully parsed, execute the AST
+                    return self.ast_executor.execute(node)
+                else:
+                    # Still incomplete, wait for more input
+                    return 0
+            
+            # Try parsing with the AST parser
+            node = self.parser.parse(line)
+            
+            if node:
+                # Successfully parsed an AST, execute it
+                return self.ast_executor.execute(node)
+            
+            if self.parser.is_incomplete():
+                # Need more input for a complete statement
+                return 0
+            
+            # Fall back to the old tokenize and execute method
             # Check for background execution
             background = line.endswith('&')
             if background:
@@ -94,6 +127,9 @@ class Shell:
             
         except Exception as e:
             print(f"Error: {e}", file=sys.stderr)
+            if self.debug_mode:
+                import traceback
+                traceback.print_exc()
             return 1
     
     def run(self) -> int:
@@ -106,10 +142,15 @@ class Shell:
                 self.job_manager.update_job_statuses()
                 
                 if self.interactive:
-                    # Get prompt from shell context
-                    prompt = SHELL.get_prompt()
+                    # Check if we're in a multi-line input state
+                    if hasattr(self, 'parser') and self.parser.is_incomplete():
+                        # Use continuation prompt (PS2)
+                        prompt = "> "
+                    else:
+                        # Get primary prompt from shell context
+                        prompt = SHELL.get_prompt()
+                        
                     line = input(prompt)
-
                 else:
                     line = input()
                     
@@ -124,13 +165,19 @@ class Shell:
                         exit_status = result
                         
                     # Only exit for non-interactive mode after command completion
-                    if not self.interactive:
+                    if not self.interactive and not (hasattr(self, 'parser') and self.parser.is_incomplete()):
                         break
                     
             except EOFError:
+                # Reset parser state if we were in the middle of a multi-line statement
+                if hasattr(self, 'parser') and self.parser.is_incomplete():
+                    self.parser.reset()
                 print()
                 break
             except KeyboardInterrupt:
+                # Reset parser state if we were in the middle of a multi-line statement
+                if hasattr(self, 'parser') and self.parser.is_incomplete():
+                    self.parser.reset()
                 print()
                 continue
                 
@@ -139,21 +186,46 @@ class Shell:
 
 def main():
     """Shell entry point"""
-    shell = Shell()
+    # Process command line arguments
+    debug_mode = False
+    args = sys.argv[1:]
+    
+    # Check for help
+    if "-h" in args or "--help" in args:
+        print("Usage: psh [OPTIONS] [SCRIPT_FILE | -c COMMAND]")
+        print("\nOptions:")
+        print("  --debug       Enable debug mode (prints AST before execution)")
+        print("  -h, --help    Show this help message and exit")
+        print("  -c COMMAND    Execute the given command")
+        print("\nExamples:")
+        print("  psh --debug script.sh                 Run script with AST debugging")
+        print("  psh --debug -c 'echo hello'           Run command with AST debugging")
+        print("  psh -c 'for i in 1 2 3; do echo $i; done'   Run a for loop")
+        return 0
+    
+    # Check for --debug flag
+    if "--debug" in args:
+        debug_mode = True
+        args.remove("--debug")
+    
+    shell = Shell(debug_mode=debug_mode)
     
     # Handle command line arguments
-    if len(sys.argv) > 1:
+    if args:
         # Handle -c option to execute a command
-        if sys.argv[1] == "-c" and len(sys.argv) > 2:
-            command = sys.argv[2]
+        if args[0] == "-c" and len(args) > 1:
+            command = args[1]
             try:
                 return shell.execute_line(command) or 0
             except Exception as e:
                 print(f"Error running command: {e}", file=sys.stderr)
+                if debug_mode:
+                    import traceback
+                    traceback.print_exc()
                 return 1
         # Handle script file
         else:
-            script_path = sys.argv[1]
+            script_path = args[0]
             try:
                 with open(script_path) as f:
                     for line in f:
