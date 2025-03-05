@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 
-from src.parser.new import tokenize, parse_redirections, split_pipeline
+from src.parser.new.lexer import tokenize
+from src.parser.new.redirection import RedirectionParser
 from src.parser.new.token_types import TokenType
+
+# Alias functions for compatibility with the rest of the file
+parse_redirections = RedirectionParser.parse_redirections
+split_pipeline = RedirectionParser.split_pipeline
 
 def print_tokens(tokens):
     """Pretty print tokens for debugging"""
     for i, token in enumerate(tokens):
-        # Handle both new and old token types
-        if hasattr(token, 'token_type'):
-            token_type = token.token_type
-        else:
-            token_type = token.type
+        # We now always use token_type
+        token_type = token.token_type
         print(f"  Token {i}: '{token.value}' ({token_type})")
 
 def test_basic_command():
