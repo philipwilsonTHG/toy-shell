@@ -97,14 +97,21 @@ class RedirectionHandler:
         # First, process and collect all redirections
         saved_fds = {}  # Keep track of saved file descriptors
         
+        # Process output redirections first, then handle descriptor duplications (2>&1)
+        # This ensures that when we redirect stderr to stdout, stdout is already pointing to the right place
+        output_redirections = []
+        descriptor_redirections = []
+        
+        # Sort redirections into groups by type
         for op, target in redirections:
-            target = expand_all(target)
-            
-            # Handle special case for 2>&1 redirection
             if op == '2>&1':
-                # Redirect stderr to stdout
-                os.dup2(sys.stdout.fileno(), sys.stderr.fileno())
-                continue
+                descriptor_redirections.append((op, target))
+            else:
+                output_redirections.append((op, target))
+                
+        # Process regular file redirections first
+        for op, target in output_redirections:
+            target = expand_all(target)
                 
             # Parse redirection operator for source fd
             if op.startswith('2'):  # stderr redirection
@@ -131,6 +138,13 @@ class RedirectionHandler:
                 fd = os.open(target, self.O_RDONLY)
                 os.dup2(fd, src_fd)
                 os.close(fd)
+        
+        # Now process descriptor redirections like 2>&1
+        # These are processed after regular redirections to ensure stdout is already pointing to the right place
+        for op, target in descriptor_redirections:
+            if op == '2>&1':
+                # Redirect stderr to wherever stdout is currently pointing
+                os.dup2(sys.stdout.fileno(), sys.stderr.fileno())
 
 
 class PipelineExecutor:

@@ -387,12 +387,12 @@ def parse_redirections(tokens: List[Token]) -> Tuple[List[Token], List[Tuple[str
         
         if is_redirection(token):
             # Handle '2>' followed by '&1' - transform to the special '2>&1' operator
-            # that RedirectionHandler expects for this specific redirection
             if token.value == '2>' and i + 1 < len(tokens) and tokens[i + 1].value == '&1':
-                # Store using the special '2>&1' operator format that the handler expects
-                redirections.append(('2>&1', '1'))
+                # The RedirectionHandler looks for this special format for fd redirection
+                redirections.append(('2>&1', ''))  # Empty target since we don't need one
                 i += 2
             else:
+                # Normal redirections require a target
                 if i + 1 >= len(tokens):
                     raise ValueError(f"Missing target for redirection {token.value}")
                 redirections.append((token.value, tokens[i + 1].value))

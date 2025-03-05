@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import sys
 from typing import List, Optional, Tuple, Dict, Any
 from .lexer import Token, tokenize, parse_redirections
 from .ast import (
@@ -194,6 +195,12 @@ class Parser:
                 
             # Extract redirections
             cmd_tokens, redirections = parse_redirections(segment)
+            
+            # Special check for 2>&1 redirection
+            for i, (redir_op, redir_target) in enumerate(redirections):
+                if redir_op == '2>' and redir_target == '&1':
+                    # Convert to a special format for this specific pattern
+                    redirections[i] = ('2>&1', '')
             
             if not cmd_tokens:
                 raise ParseError("Empty command in pipeline")

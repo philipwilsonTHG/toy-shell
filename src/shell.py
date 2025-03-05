@@ -121,7 +121,16 @@ class Shell:
             
             # Debug output
             if self.debug_mode:
-                print(f"[DEBUG] Raw tokens: {tokens}", file=sys.stderr)
+                print("[DEBUG] Raw tokens:", file=sys.stderr)
+                for i, token in enumerate(tokens):
+                    print(f"  Token {i}: '{token.value}' ({token.type})", file=sys.stderr)
+                
+                # Debug the redirections
+                from .parser.lexer import parse_redirections
+                cmd_tokens, redirections = parse_redirections(tokens)
+                print("[DEBUG] Parsed redirections:", file=sys.stderr)
+                for op, target in redirections:
+                    print(f"  {op} -> {target}", file=sys.stderr)
                 
             result = self.pipeline_executor.execute_pipeline(tokens, background)
             

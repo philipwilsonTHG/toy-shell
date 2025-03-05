@@ -210,9 +210,19 @@ class ASTExecutor(ASTVisitor):
             
         # Add redirections with variable expansion
         for redir_op, redir_target in node.redirections:
-            tokens.append(Token(redir_op, 'operator'))
-            expanded_target = self.expand_word(redir_target)
-            tokens.append(Token(expanded_target, 'word'))
+            # Special handling for 2>&1 format
+            if redir_op == '2>&1':
+                # This is already in the format we want
+                tokens.append(Token('2>', 'operator'))
+                tokens.append(Token('&1', 'operator'))
+            elif redir_op == '2>' and redir_target == '&1':
+                # Also handle this format explicitly
+                tokens.append(Token('2>', 'operator'))
+                tokens.append(Token('&1', 'operator'))
+            else:
+                tokens.append(Token(redir_op, 'operator'))
+                expanded_target = self.expand_word(redir_target)
+                tokens.append(Token(expanded_target, 'word'))
             
         # Execute the command
         result = self.pipeline_executor.execute_pipeline(tokens, node.background)
@@ -236,9 +246,19 @@ class ASTExecutor(ASTVisitor):
             
             # Add redirections with variable expansion
             for redir_op, redir_target in cmd.redirections:
-                tokens.append(Token(redir_op, 'operator'))
-                expanded_target = self.expand_word(redir_target)
-                tokens.append(Token(expanded_target, 'word'))
+                # Special handling for 2>&1 format
+                if redir_op == '2>&1':
+                    # This is already in the format we want
+                    tokens.append(Token('2>', 'operator'))
+                    tokens.append(Token('&1', 'operator'))
+                elif redir_op == '2>' and redir_target == '&1':
+                    # Also handle this format explicitly
+                    tokens.append(Token('2>', 'operator'))
+                    tokens.append(Token('&1', 'operator'))
+                else:
+                    tokens.append(Token(redir_op, 'operator'))
+                    expanded_target = self.expand_word(redir_target)
+                    tokens.append(Token(expanded_target, 'word'))
             
             # Add pipe between commands (except after the last command)
             if i < len(node.commands) - 1:
