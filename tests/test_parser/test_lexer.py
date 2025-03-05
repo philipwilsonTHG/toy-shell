@@ -211,7 +211,7 @@ def test_complex_command():
     cmd2_tokens, cmd2_redirs = parse_redirections(segments[1])
     assert [t.value for t in cmd2_tokens] == ['sort', '-r']
     assert ('>', 'output.txt') in cmd2_redirs
-    assert ('2>', '&1') in cmd2_redirs
+    assert ('2>&1', '1') in cmd2_redirs  # Now using the special form for 2>&1 redirection
 
 def test_error_cases():
     """Test error handling"""
