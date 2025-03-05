@@ -2,18 +2,16 @@
 Command parsing and lexical analysis
 """
 
-# Import old modules for backward compatibility
+# Import expander & quotes modules for backward compatibility
 from .expander import expand_variables, expand_command_substitution
 from .quotes import handle_quotes, is_quoted, strip_quotes
 
-# Choose which implementation to use - comment one and uncomment the other
-
-# Use the original lexer implementation:
-# from .lexer import tokenize, remove_quotes, parse_redirections, split_pipeline, Token, is_redirection
-
-# Use the new lexer implementation through the compatibility layer:
-from .new.compatibility import tokenize, parse_redirections, split_pipeline
-from .lexer import Token, remove_quotes, is_redirection
+# Import our new lexer implementation through the compatibility layer
+# This provides all the functionality of the old lexer but with better code organization
+from .new.compatibility import (
+    tokenize, parse_redirections, split_pipeline,
+    Token, remove_quotes, is_redirection
+)
 
 __all__ = [
     'tokenize',

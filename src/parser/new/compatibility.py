@@ -8,19 +8,58 @@ can work without changes.
 """
 
 from typing import List, Tuple, Dict, Optional, Any
-from .token_types import Token, TokenType
+from .token_types import Token as NewToken, TokenType
 from .lexer import tokenize as new_tokenize
 from .redirection import RedirectionParser
+
+# Legacy Token class for backward compatibility
+class Token:
+    """Represents a shell token with type information"""
+    
+    def __init__(self, value: str, token_type: str = 'word'):
+        self.value = value
+        self.type = token_type
+        self.quoted = False  # Track if this token was originally quoted
+    
+    def __str__(self) -> str:
+        return self.value
+    
+    def __repr__(self) -> str:
+        if hasattr(self, 'quoted') and self.quoted:
+            return f"Token({self.value!r}, {self.type!r}, quoted=True)"
+        return f"Token({self.value!r}, {self.type!r})"
+
+# Legacy function for removing quotes
+def remove_quotes(token: str) -> str:
+    """Remove surrounding quotes from a token if present"""
+    if len(token) >= 2:
+        if (token[0] == '"' and token[-1] == '"') or (token[0] == "'" and token[-1] == "'"):
+            return token[1:-1]
+    return token
+
+# Legacy function to check if a token is a redirection operator
+def is_redirection(token: Token) -> bool:
+    """Check if token is a redirection operator"""
+    if token.type != 'operator':
+        return False
+    # Match basic redirections
+    if token.value in {'>', '<', '>>', '<<', '>&', '<&'}:
+        return True
+    # Match stderr redirections
+    if token.value in {'2>', '2>>'}:
+        return True
+    # Handle &1 (file descriptor reference) as part of a redirection
+    if token.value == '&1':
+        return True
+    return False
 
 def adapt_token_type(token_type: TokenType) -> str:
     """Convert new TokenType enum to old token type string"""
     return token_type.value
 
-def create_legacy_token(token: Token) -> Any:
-    """Create a token compatible with the old Token class"""
-    from ..lexer import Token as LegacyToken
-    
-    legacy_token = LegacyToken(token.value, adapt_token_type(token.token_type))
+def create_legacy_token(token: NewToken) -> Token:
+    """Create a token compatible with the legacy Token class"""
+    legacy_token = Token(token.value, adapt_token_type(token.token_type))
     if token.quoted:
         legacy_token.quoted = True
     
@@ -31,7 +70,7 @@ def tokenize(line: str) -> List[Any]:
     new_tokens = new_tokenize(line)
     return [create_legacy_token(token) for token in new_tokens]
 
-def parse_redirections(tokens: List[Any]) -> Tuple[List[Any], List[Tuple[str, str]]]:
+def parse_redirections(tokens: List[Token]) -> Tuple[List[Token], List[Tuple[str, str]]]:
     """Parse redirections using the new parser, but with compatibility for old tokens"""
     # Convert legacy tokens to new tokens
     new_tokens = []
@@ -41,7 +80,7 @@ def parse_redirections(tokens: List[Any]) -> Tuple[List[Any], List[Tuple[str, st
                      TokenType.SUBSTITUTION if token.type == 'substitution' else \
                      TokenType.WORD
         
-        new_token = Token(token.value, token_type)
+        new_token = NewToken(token.value, token_type)
         if hasattr(token, 'quoted'):
             new_token.quoted = token.quoted
         
@@ -55,7 +94,7 @@ def parse_redirections(tokens: List[Any]) -> Tuple[List[Any], List[Tuple[str, st
     
     return legacy_cmd_tokens, redirections
 
-def split_pipeline(tokens: List[Any]) -> List[List[Any]]:
+def split_pipeline(tokens: List[Token]) -> List[List[Token]]:
     """Split a pipeline using the new parser, but with compatibility for old tokens"""
     # Convert legacy tokens to new tokens
     new_tokens = []
@@ -65,7 +104,7 @@ def split_pipeline(tokens: List[Any]) -> List[List[Any]]:
                      TokenType.SUBSTITUTION if token.type == 'substitution' else \
                      TokenType.WORD
         
-        new_token = Token(token.value, token_type)
+        new_token = NewToken(token.value, token_type)
         if hasattr(token, 'quoted'):
             new_token.quoted = token.quoted
         
