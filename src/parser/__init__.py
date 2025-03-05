@@ -1,6 +1,25 @@
 """
 Command parsing and lexical analysis
+
+DEPRECATED IMPORT PATH: Importing from src.parser is deprecated.
+
+Please use these direct imports instead:
+- from src.parser.new.token_types import Token, TokenType
+- from src.parser.new.lexer import tokenize
+- from src.parser.new.redirection import RedirectionParser
+
+See docs/migration_guide.md for details on migrating to the new API.
 """
+
+import warnings
+
+warnings.warn(
+    "Importing lexer components from src.parser is deprecated. "
+    "Use src.parser.new.token_types, src.parser.new.lexer, and src.parser.new.redirection directly. "
+    "See docs/migration_guide.md for details.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 # Import expander & quotes modules for backward compatibility
 from .expander import expand_variables, expand_command_substitution

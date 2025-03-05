@@ -1,11 +1,28 @@
 #!/usr/bin/env python3
 
 """
-Compatibility layer for the new lexer implementation.
+DEPRECATED: Compatibility layer for the new lexer implementation.
+
 This module provides adapter functions to make the new lexer API
-compatible with the old lexer API, so the rest of the code 
-can work without changes.
+compatible with the old lexer API, but it is now deprecated.
+
+Use the new API directly instead:
+- Import Token, TokenType from src.parser.new.token_types
+- Import tokenize from src.parser.new.lexer
+- Import RedirectionParser from src.parser.new.redirection
+
+This compatibility layer will be removed in a future release.
 """
+
+import warnings
+
+warnings.warn(
+    "The compatibility layer in src.parser.new.compatibility is deprecated. "
+    "Use src.parser.new.token_types, src.parser.new.lexer, and src.parser.new.redirection directly. "
+    "See docs/migration_guide.md for details.",
+    DeprecationWarning,
+    stacklevel=2
+)
 
 from typing import List, Tuple, Dict, Optional, Any
 from .token_types import Token as NewToken, TokenType

@@ -173,9 +173,11 @@ The new API provides several features that weren't available in the legacy API:
 
 ## Deprecation Timeline
 
-1. **Current State**: Compatibility layer is in place, old lexer.py removed
-2. **Phase 1** (Next Release): Mark compatibility layer as deprecated with warnings
-3. **Phase 2** (Future Release): Remove compatibility layer completely
+1. **Previous State**: Compatibility layer in place, old lexer.py removed
+2. **Current State**: Compatibility layer marked as deprecated with warnings
+   - Warnings will be shown when importing from src.parser
+   - Core codebase has been migrated to direct API usage
+3. **Phase 3** (Next Release): Remove compatibility layer completely
 
 ## Example: Complete Migration
 
