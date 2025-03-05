@@ -1,7 +1,13 @@
 #!/usr/bin/env python3
 
 import pytest
-from src.parser import Token, tokenize, split_pipeline, parse_redirections
+from src.parser.new.token_types import Token, TokenType
+from src.parser.new.lexer import tokenize
+from src.parser.new.redirection import RedirectionParser
+
+# For compatibility with tests
+parse_redirections = RedirectionParser.parse_redirections
+split_pipeline = RedirectionParser.split_pipeline
 
 def test_basic_tokenization():
     """Test basic command tokenization"""
@@ -9,7 +15,7 @@ def test_basic_tokenization():
     tokens = tokenize(line)
     assert len(tokens) == 3
     assert [t.value for t in tokens] == ["ls", "-l", "/tmp"]
-    assert all(t.type == 'word' for t in tokens)
+    assert all(t.token_type == TokenType.WORD for t in tokens)
 
 def test_stderr_redirection():
     """Test stderr redirection tokenization"""
@@ -17,14 +23,14 @@ def test_stderr_redirection():
     tokens = tokenize("command 2> error.log")
     assert len(tokens) == 3
     assert tokens[1].value == "2>"
-    assert tokens[1].type == "operator"
+    assert tokens[1].token_type == TokenType.OPERATOR
     assert tokens[2].value == "error.log"
     
     # Stderr append
     tokens = tokenize("command 2>> error.log")
     assert len(tokens) == 3
     assert tokens[1].value == "2>>"
-    assert tokens[1].type == "operator"
+    assert tokens[1].token_type == TokenType.OPERATOR
     assert tokens[2].value == "error.log"
     
     # Multiple redirections
@@ -174,7 +180,7 @@ def test_operators():
     """Test operator recognition"""
     line = "cmd1 | cmd2 > file 2>&1"
     tokens = tokenize(line)
-    operators = [t for t in tokens if t.type == 'operator']
+    operators = [t for t in tokens if t.token_type == TokenType.OPERATOR]
     assert len(operators) == 4
     assert [op.value for op in operators] == ["|", ">", "2>", "&1"]
 

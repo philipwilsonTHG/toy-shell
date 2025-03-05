@@ -179,7 +179,7 @@ os.unlink(script_path)
         pipeline_test = f"""
 import os
 import sys
-from src.parser import tokenize
+from src.parser.new.lexer import tokenize
 from src.execution.pipeline import PipelineExecutor
 
 # Create an output file path

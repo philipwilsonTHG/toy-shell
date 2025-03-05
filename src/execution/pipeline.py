@@ -5,7 +5,8 @@ import sys
 import signal
 from typing import List, Tuple, Dict, Optional
 
-from ..parser import Token, parse_redirections, split_pipeline
+from ..parser.new.token_types import Token, TokenType, create_word_token
+from ..parser.new.redirection import RedirectionParser
 from ..parser.expander import expand_all, expand_command_substitution
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController
@@ -208,7 +209,7 @@ class PipelineExecutor:
     def execute_pipeline(self, tokens: List[Token], background: bool = False) -> Optional[int]:
         """Execute a pipeline of commands"""
         # Split into pipeline segments
-        segments = split_pipeline(tokens)
+        segments = RedirectionParser.split_pipeline(tokens)
         if not segments:
             return 0  # Return 0 instead of None for empty commands
         
@@ -219,7 +220,7 @@ class PipelineExecutor:
         processes = []
         for i, segment in enumerate(segments):
             # Handle redirections
-            cmd_tokens, redirections = parse_redirections(segment)
+            cmd_tokens, redirections = RedirectionParser.parse_redirections(segment)
             if not cmd_tokens:
                 continue
                 
@@ -233,7 +234,7 @@ class PipelineExecutor:
             expanded_tokens = []
             for token in cmd_tokens:
                 # For command substitution, handle normally
-                if token.type == 'substitution':
+                if token.token_type == TokenType.SUBSTITUTION:
                     expanded = expand_command_substitution(token.value)
                     if expanded:
                         expanded_tokens.extend(expanded.split())

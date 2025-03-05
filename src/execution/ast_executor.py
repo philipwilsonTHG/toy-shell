@@ -182,12 +182,12 @@ class ASTExecutor(ASTVisitor):
             return self.handle_test_command(node.args)
         
         # Regular command execution using pipeline executor
-        from ..parser import Token
+        from ..parser.new.token_types import Token, TokenType, create_word_token
         
         # Create tokens from command, expanding variables
         tokens = []
         expanded_command = self.expand_word(node.command)
-        tokens.append(Token(expanded_command, 'word'))
+        tokens.append(create_word_token(expanded_command))
         
         for arg in node.args[1:]:
             # Check if we need to preserve spaces for quotes
@@ -200,12 +200,8 @@ class ASTExecutor(ASTVisitor):
             if self.debug_mode:
                 print(f"[DEBUG] Processing arg: '{arg}' => '{expanded_arg}' (quoted: {is_quoted_arg})", file=sys.stderr)
             
-            # Create a special token attribute to mark quoted arguments    
-            token = Token(expanded_arg, 'word')
-            if is_quoted_arg:
-                # Add attribute to token to track that it came from a quoted string
-                token.quoted = True
-            
+            # Create a special token attribute to mark quoted arguments
+            token = create_word_token(expanded_arg, quoted=is_quoted_arg)
             tokens.append(token)
             
         # Add redirections with variable expansion
@@ -213,16 +209,16 @@ class ASTExecutor(ASTVisitor):
             # Special handling for 2>&1 format
             if redir_op == '2>&1':
                 # This is already in the format we want
-                tokens.append(Token('2>', 'operator'))
-                tokens.append(Token('&1', 'operator'))
+                tokens.append(Token('2>', TokenType.OPERATOR))
+                tokens.append(Token('&1', TokenType.OPERATOR))
             elif redir_op == '2>' and redir_target == '&1':
                 # Also handle this format explicitly
-                tokens.append(Token('2>', 'operator'))
-                tokens.append(Token('&1', 'operator'))
+                tokens.append(Token('2>', TokenType.OPERATOR))
+                tokens.append(Token('&1', TokenType.OPERATOR))
             else:
-                tokens.append(Token(redir_op, 'operator'))
+                tokens.append(Token(redir_op, TokenType.OPERATOR))
                 expanded_target = self.expand_word(redir_target)
-                tokens.append(Token(expanded_target, 'word'))
+                tokens.append(create_word_token(expanded_target))
             
         # Execute the command
         result = self.pipeline_executor.execute_pipeline(tokens, node.background)
@@ -232,37 +228,37 @@ class ASTExecutor(ASTVisitor):
     def visit_pipeline(self, node: PipelineNode) -> int:
         """Execute a pipeline of commands"""
         # Convert back to tokens for pipeline executor
-        from ..parser import Token
+        from ..parser.new.token_types import Token, TokenType, create_word_token
         
         tokens = []
         for i, cmd in enumerate(node.commands):
             # Add command and args with variable expansion
             expanded_command = self.expand_word(cmd.command)
-            tokens.append(Token(expanded_command, 'word'))
+            tokens.append(create_word_token(expanded_command))
             
             for arg in cmd.args[1:]:
                 expanded_arg = self.expand_word(arg)
-                tokens.append(Token(expanded_arg, 'word'))
+                tokens.append(create_word_token(expanded_arg))
             
             # Add redirections with variable expansion
             for redir_op, redir_target in cmd.redirections:
                 # Special handling for 2>&1 format
                 if redir_op == '2>&1':
                     # This is already in the format we want
-                    tokens.append(Token('2>', 'operator'))
-                    tokens.append(Token('&1', 'operator'))
+                    tokens.append(Token('2>', TokenType.OPERATOR))
+                    tokens.append(Token('&1', TokenType.OPERATOR))
                 elif redir_op == '2>' and redir_target == '&1':
                     # Also handle this format explicitly
-                    tokens.append(Token('2>', 'operator'))
-                    tokens.append(Token('&1', 'operator'))
+                    tokens.append(Token('2>', TokenType.OPERATOR))
+                    tokens.append(Token('&1', TokenType.OPERATOR))
                 else:
-                    tokens.append(Token(redir_op, 'operator'))
+                    tokens.append(Token(redir_op, TokenType.OPERATOR))
                     expanded_target = self.expand_word(redir_target)
-                    tokens.append(Token(expanded_target, 'word'))
+                    tokens.append(create_word_token(expanded_target))
             
             # Add pipe between commands (except after the last command)
             if i < len(node.commands) - 1:
-                tokens.append(Token('|', 'operator'))
+                tokens.append(Token('|', TokenType.OPERATOR))
         
         # Execute the pipeline
         result = self.pipeline_executor.execute_pipeline(tokens, node.background)
