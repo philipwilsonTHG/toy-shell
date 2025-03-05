@@ -16,6 +16,24 @@ class Token:
     def __repr__(self) -> str:
         return f"Token({self.value!r}, {self.type!r})"
 
+# Define shell keywords
+KEYWORDS = {
+    'if': 'keyword',
+    'then': 'keyword',
+    'else': 'keyword',
+    'elif': 'keyword',
+    'fi': 'keyword',
+    'while': 'keyword',
+    'until': 'keyword',
+    'for': 'keyword',
+    'do': 'keyword',
+    'done': 'keyword',
+    'case': 'keyword',
+    'esac': 'keyword',
+    'in': 'keyword',
+    'function': 'keyword',
+}
+
 def tokenize(line: str) -> List[Token]:
     """Tokenize a command line into shell tokens
     
@@ -263,6 +281,11 @@ def tokenize(line: str) -> List[Token]:
         raise ValueError("Unterminated single quote")
     if in_double_quote:
         raise ValueError("Unterminated double quote")
+    
+    # Mark keywords in token stream
+    for i, token in enumerate(tokens):
+        if token.type == 'word' and token.value in KEYWORDS:
+            tokens[i] = Token(token.value, KEYWORDS[token.value])
     
     return tokens
 

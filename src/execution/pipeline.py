@@ -26,8 +26,9 @@ class TokenExpander:
             if expanded:
                 expanded_tokens.extend(expanded.split())
         else:
-            # Handle other expansions
+            # Handle other expansions including variables
             expanded = expand_all(token.value)
+            
             # Handle wildcards
             if '*' in expanded or '?' in expanded:
                 import glob
@@ -37,7 +38,11 @@ class TokenExpander:
                 else:
                     expanded_tokens.append(expanded)
             else:
-                expanded_tokens.extend(expanded.split())
+                # Handle variables properly
+                if ' ' in expanded:
+                    expanded_tokens.extend(expanded.split())
+                else:
+                    expanded_tokens.append(expanded)
                 
         return expanded_tokens
     
