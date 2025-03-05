@@ -119,12 +119,14 @@ def tokenize(line: str) -> List[Token]:
         
         # Handle $ character
         if char == '$':
-            # Inside quotes, treat as literal text
-            if in_single_quote or in_double_quote:
+            # Handle differently based on quotes
+            if in_single_quote:
+                # In single quotes, treat as literal text
                 current.append(char)
                 i += 1
                 continue
-                
+            
+            # In double quotes or unquoted, handle variable expansion
             # Handle $() command substitution
             if i + 1 < len(line) and line[i + 1] == '(':
                 if current:
@@ -160,13 +162,9 @@ def tokenize(line: str) -> List[Token]:
                 tokens.append(Token(line[i:cmd_end + 1], 'substitution'))
                 i = cmd_end + 1
             else:
-                # For standalone $ character (not followed by valid substitution)
-                if current:
-                    tokens.append(Token(''.join(current)))
-                    current = []
-                
-                # Add $ as its own token
-                tokens.append(Token('$', 'word'))
+                # For $ followed by variable name
+                # Keep $ as part of the current token
+                current.append(char)
                 i += 1
             continue
 # Handle backtick command substitution

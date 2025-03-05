@@ -332,6 +332,14 @@ class ASTExecutor(ASTVisitor):
         # Replace variables with their values
         expanded = word
         
+        # Special case for quoted strings - remove quotes and handle separately
+        if (word.startswith('"') and word.endswith('"')):
+            inner_content = word[1:-1]
+            # Apply variable expansion on the inner content
+            from ..parser.expander import expand_variables
+            inner_expanded = expand_variables(inner_content)
+            return inner_expanded
+        
         # Simple variable expansion
         var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
         
