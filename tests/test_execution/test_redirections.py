@@ -7,7 +7,7 @@ import unittest
 import subprocess
 from io import StringIO
 
-from src.parser.lexer import tokenize
+from src.parser import tokenize
 from src.execution.pipeline import PipelineExecutor, RedirectionHandler
 
 class RedirectionTests(unittest.TestCase):
@@ -179,7 +179,7 @@ os.unlink(script_path)
         pipeline_test = f"""
 import os
 import sys
-from src.parser.lexer import tokenize
+from src.parser import tokenize
 from src.execution.pipeline import PipelineExecutor
 
 # Create an output file path

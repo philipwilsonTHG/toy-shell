@@ -8,14 +8,16 @@ import sys
 
 def test_old_lexer():
     """Test the original lexer implementation"""
-    from src.parser.lexer import Token, tokenize, parse_redirections, split_pipeline
+    # Note: This function is now obsolete since old lexer.py is removed
+    # We'll use the parser module directly, which now imports from the new implementation
+    from src.parser import Token, tokenize, parse_redirections, split_pipeline
     
-    print("\n=== Testing original lexer ===")
+    print("\n=== Testing parser module (using new lexer) ===")
     
     # Test basic tokenization
     line = 'ls -la /nonexistant > /tmp/out.txt 2>&1'
     tokens = tokenize(line)
-    print("Original lexer tokens:")
+    print("Parser module tokens:")
     for i, token in enumerate(tokens):
         print(f"  Token {i}: '{token.value}' ({token.type})")
     

@@ -2,7 +2,7 @@
 
 import sys
 from typing import List, Optional, Tuple, Dict, Any
-from .lexer import Token, tokenize, parse_redirections
+from . import Token, tokenize, parse_redirections
 from .ast import (
     Node, CommandNode, PipelineNode, IfNode, WhileNode, 
     ForNode, CaseNode, FunctionNode, ListNode, CaseItem

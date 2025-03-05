@@ -5,7 +5,7 @@ import sys
 import signal
 from typing import List, Tuple, Dict, Optional
 
-from ..parser.lexer import Token, parse_redirections, split_pipeline
+from ..parser import Token, parse_redirections, split_pipeline
 from ..parser.expander import expand_all, expand_command_substitution
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import pytest
-from src.parser.lexer import Token, tokenize, split_pipeline, parse_redirections
+from src.parser import Token, tokenize, split_pipeline, parse_redirections
 
 def test_basic_tokenization():
     """Test basic command tokenization"""

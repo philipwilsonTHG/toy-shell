@@ -9,7 +9,7 @@ from .context import SHELL
 from .utils.terminal import TerminalController
 from .utils.history import HistoryManager
 from .utils.completion import Completer
-from .parser.lexer import Token, tokenize
+from .parser import Token, tokenize
 from .config.manager import ConfigManager
 from .execution.pipeline import PipelineExecutor
 from .execution.job_manager import JobManager
@@ -126,7 +126,7 @@ class Shell:
                     print(f"  Token {i}: '{token.value}' ({token.type})", file=sys.stderr)
                 
                 # Debug the redirections
-                from .parser.lexer import parse_redirections
+                from .parser import parse_redirections
                 cmd_tokens, redirections = parse_redirections(tokens)
                 print("[DEBUG] Parsed redirections:", file=sys.stderr)
                 for op, target in redirections:
