@@ -94,9 +94,18 @@ class RedirectionHandler:
     
     def apply_redirections(self, redirections: List[Tuple[str, str]]):
         """Apply a list of redirections to the current process"""
+        # First, process and collect all redirections
+        saved_fds = {}  # Keep track of saved file descriptors
+        
         for op, target in redirections:
             target = expand_all(target)
             
+            # Handle special case for 2>&1 redirection
+            if op == '2>&1':
+                # Redirect stderr to stdout
+                os.dup2(sys.stdout.fileno(), sys.stderr.fileno())
+                continue
+                
             # Parse redirection operator for source fd
             if op.startswith('2'):  # stderr redirection
                 src_fd = sys.stderr.fileno()
@@ -104,8 +113,13 @@ class RedirectionHandler:
             else:
                 src_fd = sys.stdout.fileno() if op.startswith('>') else sys.stdin.fileno()
             
+            # Save original fd if not already saved
+            if src_fd not in saved_fds:
+                saved_fds[src_fd] = os.dup(src_fd)
+            
             # Handle different redirection types
             if op == '>' or op.endswith('>'):
+                # Handle normal file redirection
                 fd = os.open(target, self.O_WRONLY | self.O_CREAT | self.O_TRUNC, 0o644)
                 os.dup2(fd, src_fd)
                 os.close(fd)

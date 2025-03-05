@@ -229,16 +229,9 @@ def tokenize(line: str) -> List[Token]:
             next_char = line[i + 1]
             
             if next_char == '>' and i + 2 < len(line) and line[i + 2] == '&':
-                # Handle 2>&1 case - split into 2> and &1 tokens for bash compatibility
-                tokens.append(Token('2>', 'operator'))
-                
-                # Handle the &1 part as its own token
-                if i + 3 < len(line) and line[i + 3] == '1':
-                    tokens.append(Token('&1', 'operator'))
-                    i += 4
-                else:
-                    tokens.append(Token('&', 'operator'))
-                    i += 3
+                # Handle 2>&1 case as a single token for proper redirection
+                tokens.append(Token('2>&1', 'operator'))
+                i += 4
             elif i + 2 < len(line) and line[i + 2] == '>':  # Handle 2>>
                 tokens.append(Token('2>>', 'operator'))
                 i += 3
@@ -330,7 +323,7 @@ def is_redirection(token: Token) -> bool:
     if token.value in {'>', '<', '>>', '<<', '>&', '<&'}:
         return True
     # Match stderr redirections
-    if token.value in {'2>', '2>>'}:
+    if token.value in {'2>', '2>>', '2>&1'}:
         return True
     # Handle &1 (file descriptor reference) as part of a redirection
     if token.value == '&1':
@@ -352,10 +345,15 @@ def parse_redirections(tokens: List[Token]) -> Tuple[List[Token], List[Tuple[str
         token = tokens[i]
         
         if is_redirection(token):
-            if i + 1 >= len(tokens):
-                raise ValueError(f"Missing target for redirection {token.value}")
-            redirections.append((token.value, tokens[i + 1].value))
-            i += 2
+            # Special case for 2>&1 which doesn't need a separate target token
+            if token.value == '2>&1':
+                redirections.append((token.value, '1'))
+                i += 1
+            else:
+                if i + 1 >= len(tokens):
+                    raise ValueError(f"Missing target for redirection {token.value}")
+                redirections.append((token.value, tokens[i + 1].value))
+                i += 2
         else:
             result.append(token)
             i += 1
