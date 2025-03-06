@@ -52,13 +52,8 @@ class CommandRule(GrammarRule):
         redirections = []
         background = False
         
-        # Parse the command and its arguments - with safety checks
-        # Maximum number of tokens to consume - avoid infinite loops
-        max_tokens = len(stream.tokens) * 2  # Set a generous safety limit
-        token_count = 0
-        
-        while not stream.is_at_end() and token_count < max_tokens:
-            token_count += 1
+        # Parse the command and its arguments
+        while not stream.is_at_end():
             token = stream.peek()
             
             if token is None:
@@ -99,11 +94,6 @@ class CommandRule(GrammarRule):
                 
             # If we get here, the token is part of the command
             args.append(stream.consume().value)
-            
-        # If we hit the token limit, log a warning and break out
-        if token_count >= max_tokens:
-            import sys
-            print("[WARNING] Command parsing exceeded token limit - breaking infinite loop", file=sys.stderr)
             
         # If no arguments were parsed, return None
         if not args:
