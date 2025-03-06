@@ -69,10 +69,10 @@ class ShellParser:
         """
         # Create token stream and context
         stream = TokenStream(tokens)
-        context = ParserContext()
+        self.context = ParserContext()
         
         # Parse program
-        return self.parse_program(stream, context)
+        return self.parse_program(stream, self.context)
     
     def parse_line(self, line: str) -> Optional[Node]:
         """
