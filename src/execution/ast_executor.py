@@ -186,15 +186,21 @@ class ASTExecutor(ASTVisitor):
         
         # Create tokens from command, expanding variables
         tokens = []
-        expanded_command = self.expand_word(node.command)
+        
+        # Handle escaped dollar signs first (before expansion)
+        fixed_command = self._handle_escaped_dollars(node.command)
+        expanded_command = self.expand_word(fixed_command)
         tokens.append(create_word_token(expanded_command))
         
         for arg in node.args[1:]:
             # Check if we need to preserve spaces for quotes
             is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
             
+            # First handle escaped dollar signs, converting \$ to $ prior to expansion
+            fixed_arg = self._handle_escaped_dollars(arg)
+            
             # Expand the argument
-            expanded_arg = self.expand_word(arg)
+            expanded_arg = self.expand_word(fixed_arg)
             
             # For debugging
             if self.debug_mode:
@@ -217,13 +223,29 @@ class ASTExecutor(ASTVisitor):
                 tokens.append(Token('&1', TokenType.OPERATOR))
             else:
                 tokens.append(Token(redir_op, TokenType.OPERATOR))
-                expanded_target = self.expand_word(redir_target)
+                fixed_target = self._handle_escaped_dollars(redir_target)
+                expanded_target = self.expand_word(fixed_target)
                 tokens.append(create_word_token(expanded_target))
             
         # Execute the command
         result = self.pipeline_executor.execute_pipeline(tokens, node.background)
         self.last_status = result if result is not None else 0
         return self.last_status
+        
+    def _handle_escaped_dollars(self, text: str) -> str:
+        """
+        Handle escaped dollar signs, converting escaped $ to $ for variable substitution
+        
+        Args:
+            text: The text to process
+        
+        Returns:
+            The text with escaped dollars converted
+        """
+        # Check for backslash-dollar sequences
+        if '\\$' in text:
+            return text.replace('\\$', '$')
+        return text
     
     def visit_pipeline(self, node: PipelineNode) -> int:
         """Execute a pipeline of commands"""
@@ -233,11 +255,13 @@ class ASTExecutor(ASTVisitor):
         tokens = []
         for i, cmd in enumerate(node.commands):
             # Add command and args with variable expansion
-            expanded_command = self.expand_word(cmd.command)
+            fixed_command = self._handle_escaped_dollars(cmd.command)
+            expanded_command = self.expand_word(fixed_command)
             tokens.append(create_word_token(expanded_command))
             
             for arg in cmd.args[1:]:
-                expanded_arg = self.expand_word(arg)
+                fixed_arg = self._handle_escaped_dollars(arg)
+                expanded_arg = self.expand_word(fixed_arg)
                 tokens.append(create_word_token(expanded_arg))
             
             # Add redirections with variable expansion
@@ -253,7 +277,8 @@ class ASTExecutor(ASTVisitor):
                     tokens.append(Token('&1', TokenType.OPERATOR))
                 else:
                     tokens.append(Token(redir_op, TokenType.OPERATOR))
-                    expanded_target = self.expand_word(redir_target)
+                    fixed_target = self._handle_escaped_dollars(redir_target)
+                    expanded_target = self.expand_word(fixed_target)
                     tokens.append(create_word_token(expanded_target))
             
             # Add pipe between commands (except after the last command)
@@ -328,7 +353,12 @@ class ASTExecutor(ASTVisitor):
             # Set loop variable in current scope
             self.current_scope.set(node.variable, word)
             
-            # Execute loop body
+            # For debugging
+            if self.debug_mode:
+                print(f"[DEBUG] For loop iteration with {node.variable}={word}", file=sys.stderr)
+            
+            # Execute the loop body without deepcopy - the variable expansion
+            # will happen properly through the scope system now
             result = self.execute(node.body)
             self.last_status = result
         
@@ -363,20 +393,38 @@ class ASTExecutor(ASTVisitor):
         # Replace variables with their values
         expanded = word
         
+        # Handle escaped dollar signs (convert \$ to $)
+        escaped_pattern = re.compile(r'\\(\$)')
+        expanded = escaped_pattern.sub(r'\1', expanded)
+        
         # Special case for quoted strings - remove quotes and handle separately
         if (word.startswith('"') and word.endswith('"')):
             inner_content = word[1:-1]
             # Apply variable expansion on the inner content
-            from ..parser.expander import expand_variables
-            inner_expanded = expand_variables(inner_content)
-            return inner_expanded
+            expanded = inner_content
+            
+            # Simple variable expansion
+            var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
+            
+            def replace_var(match):
+                var_name = match.group(1)
+                var_value = self.current_scope.get(var_name)
+                if self.debug_mode:
+                    print(f"[DEBUG] Expanding ${var_name} to '{var_value}' in quoted string", file=sys.stderr)
+                return var_value or ''
+                
+            expanded = var_pattern.sub(replace_var, expanded)
+            return expanded
         
         # Simple variable expansion
         var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
         
         def replace_var(match):
             var_name = match.group(1)
-            return self.current_scope.get(var_name) or ''
+            var_value = self.current_scope.get(var_name)
+            if self.debug_mode:
+                print(f"[DEBUG] Expanding ${var_name} to '{var_value}'", file=sys.stderr)
+            return var_value or ''
             
         expanded = var_pattern.sub(replace_var, expanded)
         

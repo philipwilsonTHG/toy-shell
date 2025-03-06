@@ -11,6 +11,8 @@ from .utils.history import HistoryManager
 from .utils.completion import Completer
 from .parser.new.token_types import Token, TokenType, create_word_token
 from .parser.new.lexer import tokenize
+from .parser.new.parser.shell_parser import ShellParser
+from .parser.expander import expand_variables
 from .config.manager import ConfigManager
 from .execution.pipeline import PipelineExecutor
 from .execution.job_manager import JobManager
@@ -25,6 +27,9 @@ class Shell:
         self.config_manager = ConfigManager()
         self.job_manager = JobManager()
         self.pipeline_executor = PipelineExecutor(self.interactive)
+        
+        # Initialize the new parser
+        self.parser = ShellParser()
         
         if self.interactive:
             # Set up job control
@@ -80,19 +85,20 @@ class Shell:
                 history(*args)
                 return 0
             
-            # Try to parse using the AST parser
-            if not hasattr(self, 'parser'):
-                from .parser.parser import Parser
-                self.parser = Parser()
-                
+            # Initialize AST executor if not already done
             if not hasattr(self, 'ast_executor'):
                 from .execution.ast_executor import ASTExecutor
                 self.ast_executor = ASTExecutor(self.interactive, self.debug_mode)
             
+            # Pre-process escaped variables for better compatibility
+            # Handle '\$VAR' format (common in scripts) by replacing with '$VAR'
+            if r'\$' in line:
+                line = line.replace(r'\$', '$')
+            
             # Check if we have an incomplete parse from a previous line
             if self.parser.is_incomplete():
                 # Use PS2 for continuation prompt
-                node = self.parser.parse(line)
+                node = self.parser.parse_multi_line(line)
                 if node:
                     # Successfully parsed, execute the AST
                     return self.ast_executor.execute(node)
@@ -100,8 +106,8 @@ class Shell:
                     # Still incomplete, wait for more input
                     return 0
             
-            # Try parsing with the AST parser
-            node = self.parser.parse(line)
+            # Try parsing the line with the new parser
+            node = self.parser.parse_line(line)
             
             if node:
                 # Successfully parsed an AST, execute it
@@ -111,7 +117,7 @@ class Shell:
                 # Need more input for a complete statement
                 return 0
             
-            # Fall back to the old tokenize and execute method
+            # Fall back to the tokenize and execute method for simple commands
             # Check for background execution
             background = line.endswith('&')
             if background:
@@ -158,7 +164,7 @@ class Shell:
                 
                 if self.interactive:
                     # Check if we're in a multi-line input state
-                    if hasattr(self, 'parser') and self.parser.is_incomplete():
+                    if self.parser.is_incomplete():
                         # Use continuation prompt (PS2)
                         prompt = "> "
                     else:
@@ -180,19 +186,21 @@ class Shell:
                         exit_status = result
                         
                     # Only exit for non-interactive mode after command completion
-                    if not self.interactive and not (hasattr(self, 'parser') and self.parser.is_incomplete()):
+                    if not self.interactive and not self.parser.is_incomplete():
                         break
                     
             except EOFError:
                 # Reset parser state if we were in the middle of a multi-line statement
-                if hasattr(self, 'parser') and self.parser.is_incomplete():
-                    self.parser.reset()
+                if self.parser.is_incomplete():
+                    # For ShellParser, we need to reset context
+                    self.parser = ShellParser()  # Create a new parser instance
                 print()
                 break
             except KeyboardInterrupt:
                 # Reset parser state if we were in the middle of a multi-line statement
-                if hasattr(self, 'parser') and self.parser.is_incomplete():
-                    self.parser.reset()
+                if self.parser.is_incomplete():
+                    # For ShellParser, we need to reset context
+                    self.parser = ShellParser()  # Create a new parser instance
                 print()
                 continue
                 
@@ -243,11 +251,14 @@ def main():
             script_path = args[0]
             try:
                 with open(script_path) as f:
-                    for line in f:
-                        shell.execute_line(line)
-                return 0
+                    # Read entire script and execute it as a whole
+                    script_content = f.read()
+                    return shell.execute_line(script_content) or 0
             except Exception as e:
                 print(f"Error running script {script_path}: {e}", file=sys.stderr)
+                if debug_mode:
+                    import traceback
+                    traceback.print_exc()
                 return 1
     
     # Interactive mode
