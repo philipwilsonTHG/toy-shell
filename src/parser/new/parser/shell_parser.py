@@ -196,6 +196,17 @@ class ShellParser:
             if token.value in self.keyword_rules:
                 return self.keyword_rules[token.value]
         
+        # Pipeline detection - check if there's a pipe operator in the token stream
+        # Look ahead for pipe operators without altering the stream position
+        has_pipe = False
+        for i in range(stream.current, min(stream.current + 10, len(stream.tokens))):
+            if i < len(stream.tokens) and stream.tokens[i].token_type == TokenType.OPERATOR and stream.tokens[i].value == '|':
+                has_pipe = True
+                break
+                
+        if has_pipe:
+            return self.pipeline_rule
+        
         # Default to command rule
         return self.default_rule
     

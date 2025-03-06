@@ -75,7 +75,13 @@ class CommandRule(GrammarRule):
                     background = True
                     break
                 elif token.value == '|':
-                    # This is handled by the pipeline rule
+                    # For pipeline operator, if we haven't parsed any arguments yet,
+                    # we're not able to handle this pattern, signal to try another rule.
+                    if not args:
+                        # Restore position - this command rule can't handle pipeline
+                        stream.restore_position(start_pos)
+                        return None
+                    # If we have args, just break and return what we have - pipeline rule will handle the rest
                     break
                     
             # Check for keywords that might indicate the end of a command

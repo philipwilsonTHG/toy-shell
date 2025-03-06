@@ -110,10 +110,19 @@ class Shell:
                     return 0
             
             # Try parsing the line with the new parser
-            node = self.parser.parse_line(line)
+            # First tokenize the input to properly handle pipelines
+            from .parser.new.lexer import tokenize
+            tokens = tokenize(line)
+            
+            # Use tokens with parse method for better pipeline handling
+            node = self.parser.parse(tokens)
             
             if node:
                 # Successfully parsed an AST, execute it
+                if self.debug_mode:
+                    print(f"[DEBUG] Executing AST:", file=sys.stderr)
+                    print(f"{node}", file=sys.stderr)
+                    
                 return self.ast_executor.execute(node)
             
             if self.parser.is_incomplete():
@@ -186,6 +195,9 @@ class Shell:
             
                 if result is not None:
                     # Check for special exit code (-1000 to -1255) indicating explicit exit
+                    if isinstance(result, list):
+                        result = result[0]
+
                     if result <= -1000 and result >= -1255:
                         exit_status = abs(result) - 1000
                         break
