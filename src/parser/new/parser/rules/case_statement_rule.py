@@ -185,10 +185,19 @@ class CaseStatementRule(GrammarRule):
         commands = []
         command_rule = CommandRule()
         
-        while not stream.is_at_end():
+        # Add safety counter to prevent infinite loops
+        max_iterations = len(stream.tokens) * 2  # Generous limit
+        iteration_count = 0
+        
+        while not stream.is_at_end() and iteration_count < max_iterations:
+            iteration_count += 1
+            
             # Check if we've reached the end of the action
             token = stream.peek()
-            
+            if token is None:
+                # Safety check - peek can sometimes return None
+                break
+                
             if token.token_type == TokenType.KEYWORD and token.value == 'esac':
                 break
                 
@@ -203,11 +212,16 @@ class CaseStatementRule(GrammarRule):
                 # If we can't parse a command, skip to the next statement
                 token = stream.consume()
                 # If we encounter a terminator or 'esac', break
-                if (token.token_type == TokenType.OPERATOR and token.value == ';') or \
-                   (token.token_type == TokenType.KEYWORD and token.value == 'esac'):
+                if token is not None and ((token.token_type == TokenType.OPERATOR and token.value == ';') or \
+                   (token.token_type == TokenType.KEYWORD and token.value == 'esac')):
                     # Unconsume the token so it can be processed by the caller
                     stream.restore_position(stream.current_position().index - 1)
                     break
+        
+        # If we hit the iteration limit, log a warning
+        if iteration_count >= max_iterations:
+            import sys
+            print("[WARNING] Case command list parsing exceeded iteration limit - breaking infinite loop", file=sys.stderr)
                     
         # If no commands were parsed, return None
         if not commands:
@@ -230,15 +244,24 @@ class CaseStatementRule(GrammarRule):
             stream: The token stream to skip in
         """
         # Skip until we find ';;', ';&', ';;& or 'esac'
-        while not stream.is_at_end():
-            token = stream.peek()
+        # Add safety counter to prevent infinite loops
+        max_iterations = len(stream.tokens) * 2  # Generous limit
+        iteration_count = 0
+        
+        while not stream.is_at_end() and iteration_count < max_iterations:
+            iteration_count += 1
             
+            token = stream.peek()
+            if token is None:
+                # Safety check - peek can sometimes return None
+                break
+                
             # Check for pattern terminators
             if token.token_type == TokenType.OPERATOR and token.value == ';':
                 stream.consume()  # Consume the first semicolon
                 
                 # Check for another semicolon
-                if not stream.is_at_end() and stream.peek().token_type == TokenType.OPERATOR:
+                if not stream.is_at_end() and stream.peek() is not None and stream.peek().token_type == TokenType.OPERATOR:
                     if stream.peek().value in {';', '&'}:
                         stream.consume()  # Consume the second separator
                         return
@@ -252,3 +275,8 @@ class CaseStatementRule(GrammarRule):
                 
             # Skip this token
             stream.consume()
+            
+        # If we hit the iteration limit, log a warning
+        if iteration_count >= max_iterations:
+            import sys
+            print("[WARNING] Skip to next pattern exceeded iteration limit - breaking infinite loop", file=sys.stderr)

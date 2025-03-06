@@ -136,7 +136,13 @@ class ShellParser:
         """
         statements = []
         
-        while not stream.is_at_end():
+        # Add a maximum iteration count to prevent infinite loops
+        max_iterations = len(stream.tokens) * 2  # Generous limit
+        iteration_count = 0
+        
+        while not stream.is_at_end() and iteration_count < max_iterations:
+            iteration_count += 1
+            
             # Select the appropriate rule based on the current token
             rule = self.select_rule(stream)
             
@@ -149,6 +155,11 @@ class ShellParser:
             if context.in_recovery_mode():
                 self.synchronize(stream, context)
                 context.exit_recovery_mode()
+                
+        # If we hit the iteration limit, log a warning
+        if iteration_count >= max_iterations:
+            import sys
+            print("[WARNING] Program parsing exceeded iteration limit - breaking infinite loop", file=sys.stderr)
         
         # If there are no statements, return None
         if not statements:
@@ -176,6 +187,10 @@ class ShellParser:
             
         token = stream.peek()
         
+        # Safety check for None token
+        if token is None:
+            return self.default_rule
+        
         # Check for keywords first
         if token.token_type == TokenType.KEYWORD:
             if token.value in self.keyword_rules:
@@ -193,9 +208,18 @@ class ShellParser:
             context: The parser context for state
         """
         # Skip until we find a statement terminator or a keyword
-        while not stream.is_at_end():
+        # Add safety limit to prevent infinite loop
+        max_tokens = len(stream.tokens)
+        skipped = 0
+        
+        while not stream.is_at_end() and skipped < max_tokens:
+            skipped += 1
             token = stream.peek()
             
+            # Handle null token (safety check)
+            if token is None:
+                return
+                
             # Statement terminators
             if token.token_type == TokenType.OPERATOR and token.value in {';', '|', '&'}:
                 stream.consume()  # Consume the terminator
@@ -211,6 +235,11 @@ class ShellParser:
                 
             # Otherwise, skip this token
             stream.consume()
+            
+        # If we hit the limit, log a warning
+        if skipped >= max_tokens:
+            import sys
+            print("[WARNING] Parser synchronization exceeded token limit", file=sys.stderr)
     
     def is_incomplete(self) -> bool:
         """

@@ -36,8 +36,20 @@ class TokenStream:
         Returns:
             The token at the current position + offset, or None if out of range
         """
+        # Safety checks to prevent infinite loops and invalid indices
+        if not self.tokens:
+            return None
+            
+        if self.current < 0:
+            self.current = 0
+            
+        if self.current >= len(self.tokens):
+            return None
+            
         if self.current + offset >= len(self.tokens):
             return None
+            
+        # Now it's safe to access the token
         return self.tokens[self.current + offset]
     
     def current_position(self) -> Position:
@@ -47,9 +59,16 @@ class TokenStream:
         Returns:
             A Position object with the current index and token
         """
+        # Safety check for current pointer
+        current = self.current
+        if current < 0:
+            current = 0
+        if current > len(self.tokens):
+            current = len(self.tokens)
+            
         return Position(
-            index=self.current,
-            token=self.peek() if self.current < len(self.tokens) else None
+            index=current,
+            token=self.peek()  # peek has its own safety checks
         )
     
     def consume(self) -> Optional[Token]:

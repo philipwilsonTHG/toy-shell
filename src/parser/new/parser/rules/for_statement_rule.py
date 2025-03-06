@@ -147,9 +147,21 @@ class ForStatementRule(GrammarRule):
         commands = []
         command_rule = CommandRule()
         
-        while not stream.is_at_end():
+        # Add safety counter to prevent infinite loops
+        max_iterations = len(stream.tokens) * 2  # Generous limit
+        iteration_count = 0
+        
+        while not stream.is_at_end() and iteration_count < max_iterations:
+            iteration_count += 1
+            
+            # Get the current token
+            token = stream.peek()
+            if token is None:
+                # Safety check - sometimes peek can return None in error conditions
+                break
+                
             # Check if we've reached an end keyword
-            if stream.peek().token_type == TokenType.KEYWORD and stream.peek().value in end_keywords:
+            if token.token_type == TokenType.KEYWORD and token.value in end_keywords:
                 break
                 
             # Parse the next command
@@ -164,6 +176,11 @@ class ForStatementRule(GrammarRule):
                     # Unconsume the token so it can be processed by the caller
                     stream.restore_position(stream.current_position().index - 1)
                     break
+        
+        # If we hit the iteration limit, log a warning
+        if iteration_count >= max_iterations:
+            import sys
+            print("[WARNING] Command list parsing exceeded iteration limit - breaking infinite loop", file=sys.stderr)
                     
         # If no commands were parsed, return None
         if not commands:
