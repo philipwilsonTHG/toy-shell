@@ -61,9 +61,19 @@ class TokenStream:
         """
         if self.is_at_end():
             return None
-            
+        
+        # Safety check: if current is somehow negative, reset to beginning
+        if self.current < 0:
+            self.current = 0
+        
+        # Get the token
         token = self.tokens[self.current]
+        
+        # Advance the pointer (with safety check for maximum)
         self.current += 1
+        if self.current > len(self.tokens):
+            self.current = len(self.tokens)
+            
         return token
     
     def match(self, token_type: TokenType, value: Optional[str] = None) -> bool:
@@ -165,4 +175,10 @@ class TokenStream:
         Args:
             position: A position index returned by save_position()
         """
+        # Safety bounds checks to prevent infinite loops
+        if position < 0:
+            position = 0
+        elif position > len(self.tokens):
+            position = len(self.tokens)
+            
         self.current = position
