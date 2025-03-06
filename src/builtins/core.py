@@ -96,41 +96,32 @@ def source(filename: Optional[str] = None) -> int:
         # This is important for executing commands in the same context
         shell = Shell()
         
-        # Read and execute each line from the file
+        # Read and execute entire file content
         with open(filepath) as f:
             exit_status = 0
             
-            for line in f:
-                line = line.strip()
-                # Skip comments and empty lines
-                if not line or line.startswith('#'):
-                    continue
-                    
-                try:
-                    # Execute the line using shell's execute_line method
-                    result = shell.execute_line(line)
-                    
-                    # Handle command results
-                    if result is not None:
-                        # Check for exit command (special code <=-1000)
-                        if result <= -1000 and result >= -1255:
-                            # Convert exit code: -1000-N → N (0-255)
-                            exit_status = abs(result) - 1000
-                            return exit_status  # Return immediately on exit
-                        else:
-                            # Save regular exit status
-                            exit_status = result
-                            
-                            # If the command failed (non-zero), consider stopping
-                            if exit_status != 0:
-                                # In strict mode, we'd stop here
-                                # For now, continue to next line
-                                pass
-                            
-                except Exception as e:
-                    # Log error and exit with failure
-                    sys.stderr.write(f"source: error executing '{line}': {e}\n")
-                    return 1
+            try:
+                # Read the entire file and execute as a single script
+                script_content = f.read()
+                
+                # Execute the script using shell's execute_line method
+                result = shell.execute_line(script_content)
+                
+                # Handle command results
+                if result is not None:
+                    # Check for exit command (special code <=-1000)
+                    if result <= -1000 and result >= -1255:
+                        # Convert exit code: -1000-N → N (0-255)
+                        exit_status = abs(result) - 1000
+                        return exit_status  # Return immediately on exit
+                    else:
+                        # Save regular exit status
+                        exit_status = result
+                        
+            except Exception as e:
+                # Log error and exit with failure
+                sys.stderr.write(f"source: error executing script: {e}\n")
+                return 1
             
             # Return the last exit status from the script
             return exit_status
