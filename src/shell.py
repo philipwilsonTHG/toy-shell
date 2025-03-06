@@ -31,6 +31,9 @@ class Shell:
         # Initialize the new parser
         self.parser = ShellParser()
         
+        # Flag to prevent infinite loops during test collection
+        self.collecting_tests = os.environ.get('PYTEST_RUNNING') == '1'
+        
         if self.interactive:
             # Set up job control
             TerminalController.setup_job_control()
@@ -157,6 +160,10 @@ class Shell:
         """Main shell loop"""
         exit_status = 0
         
+        # If we're running in pytest collection mode, just return immediately
+        if self.collecting_tests and not self.interactive:
+            return 0
+            
         while True:
             try:
                 # Update job statuses

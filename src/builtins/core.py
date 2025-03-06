@@ -94,7 +94,8 @@ def source(filename: Optional[str] = None) -> int:
         
         # Create a shell instance with the same interactive state as the parent
         # This is important for executing commands in the same context
-        shell = Shell()
+        # Always set debug_mode to False to prevent hanging during test collection
+        shell = Shell(debug_mode=False)
         
         # Read and execute entire file content
         with open(filepath) as f:
