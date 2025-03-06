@@ -1,38 +1,74 @@
-# Migration Guide: Transitioning to the New Lexer API
+# Migration Guide: Transitioning to the New Parser API
 
-This document provides guidance for transitioning from the compatibility layer to the new lexer API.
+This document provides guidance for transitioning from the old parser API to the new parser API.
 
 ## Background
 
-The shell's lexer implementation has been refactored for better maintainability and extensibility. During this process, we created a compatibility layer to ensure existing code continued to work without modification. Now that the refactoring is complete, migrating to the new API directly will provide several benefits:
+The shell's parser implementation has been completely refactored for better maintainability, extensibility, and error handling. The new implementation:
 
-- Better type safety with the `TokenType` enum
-- More object-oriented design with proper token methods
-- Improved performance by eliminating translation overhead
-- Access to additional token features not available in the legacy API
+- Uses a modular design with grammar-specific rule classes
+- Provides better error reporting and recovery
+- Supports more complex shell constructs
+- Has improved performance and stability
+
+This refactoring includes both the lexer and parser components. Key benefits of the new API include:
+
+- Better type safety with enums like `TokenType`
+- More object-oriented design with proper methods and classes
+- Consistent API for all parsing operations
+- Improved error handling and reporting
+- Support for more complex shell scripting features
 
 ## Core Changes
 
-### Token Class
+### Parser Class
 
-**Old (Compatibility Layer):**
+**Old API:**
 ```python
-from src.parser import Token
+from src.parser import Parser
 
-# Old constructor with string type
-token = Token("value", "word")  
+# Create parser
+parser = Parser()
 
-# Type is a string
-if token.type == "operator":
-    # handle operator
+# Parse a line
+node = parser.parse("echo hello world")
 
-# Token attribute was a direct field
-token.quoted = True  
+# Check for incomplete input
+if parser.is_incomplete():
+    # Need more input
+    more_input = input("> ")
+    node = parser.parse(more_input)
 ```
 
 **New API:**
 ```python
-from src.parser.new.token_types import Token, TokenType, create_word_token
+from src.parser import ShellParser
+
+# Create parser
+parser = ShellParser()
+
+# Parse a single line
+node = parser.parse_line("echo hello world")
+
+# For multi-line input
+node1 = parser.parse_multi_line("if test -f /etc/passwd")
+# node1 is None, need more input
+node2 = parser.parse_multi_line("then echo exists; fi")
+# node2 is the complete AST
+```
+
+### Token Class
+
+**Old API:**
+```python
+# This is already covered in the legacy migration guide
+from src.parser import Token
+token = Token("value", "word")
+```
+
+**New API:**
+```python
+from src.parser import Token, TokenType
 
 # Use enum for types
 token = Token("value", TokenType.WORD)
@@ -44,14 +80,11 @@ if token.token_type == TokenType.OPERATOR:
 # Or use helper methods
 if token.is_operator():
     # handle operator
-   
-# For creating common tokens, use factory functions
-token = create_word_token("value", quoted=True)
 ```
 
-### Tokenization
+### Low-level Parsing Components
 
-**Old (Compatibility Layer):**
+**Old API:**
 ```python
 from src.parser import tokenize, parse_redirections, split_pipeline
 
@@ -62,81 +95,104 @@ segments = split_pipeline(tokens)
 
 **New API:**
 ```python
-from src.parser.new.lexer import tokenize
-from src.parser.new.redirection import RedirectionParser
+from src.parser import tokenize, parse_redirections, split_pipeline
 
+# The low-level functions have the same names and signatures
 tokens = tokenize("command arg1 arg2 > output.txt")
-cmd_tokens, redirections = RedirectionParser.parse_redirections(tokens)
-segments = RedirectionParser.split_pipeline(tokens)
+cmd_tokens, redirections = parse_redirections(tokens)
+segments = split_pipeline(tokens)
 ```
 
 ## Migration Steps
 
 ### 1. Update Imports
 
-Replace imports from the compatibility layer with direct imports from the new modules:
+Replace imports from the old API with imports from the new modules:
 
 ```python
 # Before
-from src.parser import Token, tokenize, parse_redirections, split_pipeline
+from src.parser import Parser
 
 # After
-from src.parser.new.token_types import Token, TokenType, create_word_token
-from src.parser.new.lexer import tokenize
-from src.parser.new.redirection import RedirectionParser
+from src.parser import ShellParser
 ```
 
-### 2. Update Token Creation
+For more direct access to components, you can use these imports:
 
-Replace string-based token types with enum values:
+```python
+# For direct access to components
+from src.parser import Token, TokenType, tokenize
+from src.parser import parse_redirections, split_pipeline
+```
+
+### 2. Replace Parser Usage
+
+Replace the old `Parser` class with the new `ShellParser`:
 
 ```python
 # Before
-token = Token("value", "word")
+parser = Parser()
+node = parser.parse("echo hello world")
 
 # After
-token = Token("value", TokenType.WORD)
-# Or use the helper functions
-token = create_word_token("value")
+parser = ShellParser()
+node = parser.parse_line("echo hello world")
 ```
 
-### 3. Update Token Access
+For multi-line parsing:
 
-Update how you access token attributes:
+```python
+# Before
+parser = Parser()
+result1 = parser.parse("if [ -f /etc/hosts ]")  # Returns None, incomplete
+result2 = parser.parse("then echo exists; fi")  # Returns complete AST
+
+# After
+parser = ShellParser()
+result1 = parser.parse_multi_line("if [ -f /etc/hosts ]")  # Returns None, incomplete
+result2 = parser.parse_multi_line("then echo exists; fi")  # Returns complete AST
+```
+
+### 3. Use Token Type Enums
+
+Replace string comparisons with enum comparisons:
 
 ```python
 # Before
 if token.type == "operator":
-    # ...
-    
+    # handle operator
+
 # After
 if token.token_type == TokenType.OPERATOR:
-    # ...
-    
-# Or use the convenience methods
+    # handle operator
+# Or better:
 if token.is_operator():
-    # ...
-```
-
-### 4. Update Redirection Handling
-
-Use the `RedirectionParser` class directly:
-
-```python
-# Before
-cmd_tokens, redirections = parse_redirections(tokens)
-segments = split_pipeline(tokens)
-
-# After
-cmd_tokens, redirections = RedirectionParser.parse_redirections(tokens)
-segments = RedirectionParser.split_pipeline(tokens)
+    # handle operator
 ```
 
 ## New Features
 
-The new API provides several features that weren't available in the legacy API:
+The new parser API provides several advanced features:
 
-1. **Token Type Checking Methods**
+1. **Direct Access to Parser Rules** 
+   
+   For complex parsing tasks, you can access the rule classes directly:
+
+   ```python
+   from src.parser.new.parser.rules import CommandRule, PipelineRule, IfStatementRule
+   from src.parser.new.parser.token_stream import TokenStream
+   from src.parser.new.parser.parser_context import ParserContext
+   
+   # Set up the context
+   stream = TokenStream(tokens)
+   context = ParserContext()
+   
+   # Use a specific rule
+   if_rule = IfStatementRule()
+   if_node = if_rule.parse(stream, context)
+   ```
+
+2. **Token Type Checking Methods**
    ```python
    # Check if a token is an operator
    if token.is_operator():
@@ -151,7 +207,7 @@ The new API provides several features that weren't available in the legacy API:
        # ...
    ```
 
-2. **Factory Functions**
+3. **Factory Functions for Tokens**
    ```python
    from src.parser.new.token_types import create_word_token, create_operator_token
    
@@ -162,61 +218,59 @@ The new API provides several features that weren't available in the legacy API:
    op = create_operator_token("|")
    ```
 
-3. **Redirection Utilities**
+4. **Parser Context for Error Handling**
    ```python
-   from src.parser.new.redirection import RedirectionType, RedirectionParser
+   from src.parser.new.parser.parser_context import ParserContext
    
-   # Check redirection type
-   if RedirectionParser.get_redirection_type(token) == RedirectionType.STDOUT:
-       # ...
+   context = ParserContext()
+   # After parsing, check for errors
+   if context.has_error():
+       print(f"Error: {context.get_error_message()}")
    ```
 
-## Deprecation Timeline
+## Migration Status
 
-1. **Previous State**: Compatibility layer in place, old lexer.py removed
-2. **Current State**: Compatibility layer marked as deprecated with warnings
-   - Warnings will be shown when importing from src.parser
-   - Core codebase has been migrated to direct API usage
-3. **Phase 3** (Next Release): Remove compatibility layer completely
+1. **Previous State**: Old parser implementation with compatibility layer
+2. **Current State**: New parser implementation, old parser removed
+   - All code must use the new ShellParser or its components
+   - Core codebase has been fully migrated to the new parser API
 
 ## Example: Complete Migration
 
-Here's a complete example of migrating a function from the old API to the new API:
+Here's a complete example of migrating a shell script parsing function:
 
 ```python
 # Before
-from src.parser import Token, tokenize, parse_redirections
+from src.parser import Parser
 
-def process_command(command_line):
-    tokens = tokenize(command_line)
-    for token in tokens:
-        if token.type == "operator" and token.value == "|":
-            print("Found pipe operator")
+def parse_script(script_content):
+    parser = Parser()
+    lines = script_content.split('\n')
+    ast_nodes = []
     
-    cmd_tokens, redirections = parse_redirections(tokens)
-    return cmd_tokens
+    for line in lines:
+        node = parser.parse(line)
+        if node is not None:
+            ast_nodes.append(node)
+    
+    return ast_nodes
 
 # After
-from src.parser.new.token_types import TokenType
-from src.parser.new.lexer import tokenize
-from src.parser.new.redirection import RedirectionParser
+from src.parser import ShellParser
 
-def process_command(command_line):
-    tokens = tokenize(command_line)
-    for token in tokens:
-        if token.is_operator("|"):
-            print("Found pipe operator")
-    
-    cmd_tokens, redirections = RedirectionParser.parse_redirections(tokens)
-    return cmd_tokens
+def parse_script(script_content):
+    parser = ShellParser()
+    # The new parser can handle the entire script at once
+    node = parser.parse_line(script_content)
+    return [node] if node else []
 ```
 
 ## Testing Your Migration
 
-After migrating to the new API, be sure to run all tests to ensure everything still works correctly:
+After migrating to the new API, run the full test suite to ensure everything works correctly:
 
 ```bash
 pytest
 ```
 
-If you encounter any issues during migration, please report them to the project maintainers.
+The test suite includes extensive tests for the new parser implementation.

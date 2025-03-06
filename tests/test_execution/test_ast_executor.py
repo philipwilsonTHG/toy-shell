@@ -10,7 +10,7 @@ from src.parser.ast import (
     ForNode, CaseNode, ListNode, FunctionNode
 )
 from src.execution.ast_executor import ASTExecutor, Scope
-from src.parser.parser import Parser
+from src.parser.new.parser.shell_parser import ShellParser
 
 
 def test_scope_variables():
@@ -160,11 +160,15 @@ def test_execute_for_loop():
         assert mock_visit.call_count == 3
         
         # Check that the variable was set for each iteration
-        # Note: we can't easily check the variable values inside the mock
-        # because they're used inside the loop execution
-        assert mock_visit.call_args_list[0][0][0] == body
-        assert mock_visit.call_args_list[1][0][0] == body
-        assert mock_visit.call_args_list[2][0][0] == body
+        # Our implementation modifies the body for better variable substitution
+        # so we can't compare with the original body directly
+        # Instead, check that it was called 3 times with some CommandNode
+        for call in mock_visit.call_args_list:
+            assert isinstance(call[0][0], CommandNode)
+            assert call[0][0].command == "echo"
+            assert len(call[0][0].args) == 2
+            assert call[0][0].args[0] == "echo"
+            assert call[0][0].args[1].startswith("Fruit:")
 
 
 def test_execute_case_statement():

@@ -9,7 +9,6 @@ the results with the old parser to ensure compatibility.
 from src.parser.new.token_types import Token, TokenType 
 from src.parser.new.lexer import tokenize
 from src.parser.new.parser.shell_parser import ShellParser
-from src.parser.new.parser.compatibility import Parser as OldParser
 from src.parser.ast import CommandNode, PipelineNode, IfNode, WhileNode, ForNode, CaseNode, FunctionNode
 
 def print_ast(node, indent=0):
@@ -64,8 +63,8 @@ def print_ast(node, indent=0):
         print(f"{prefix}  Body:")
         print_ast(node.body, indent + 2)
 
-def test_parser(input_line, compare_with_old=False):
-    """Test the new parser on a given input and compare with the old parser."""
+def parse_test_input(input_line):
+    """Test the new parser on a given input."""
     print(f"\n=== Testing parser on: {input_line!r} ===")
     
     # Parse with the new parser
@@ -73,49 +72,48 @@ def test_parser(input_line, compare_with_old=False):
     tokens = tokenize(input_line)
     result = parser.parse(tokens)
     
-    print("\nNew Parser Result:")
+    print("\nParser Result:")
     print_ast(result)
-    
-    # Compare with the old parser if requested (disabled by default)
-    if compare_with_old:
-        print("\nOld Parser Result:")
-        old_parser = OldParser()
-        old_result = old_parser.parse(input_line)
-        print_ast(old_result)
+        
+def test_parser():
+    """Pytest compatible test function that tests various parser inputs."""
+    parse_test_input("echo hello world")
+    parse_test_input("for i in 1 2 3; do echo $i; done")
+    return True
 
 # Test simple commands
 def test_simple_commands():
     print("\n==== Simple Commands ====")
-    test_parser("echo hello world")
-    test_parser("ls -la /tmp")
-    test_parser("cd /usr/local/bin")
-    test_parser("echo hello > output.txt")
-    test_parser("cat < input.txt")
-    test_parser("grep pattern file | sort | uniq")
-    test_parser("sleep 10 &")
+    parse_test_input("echo hello world")
+    parse_test_input("ls -la /tmp")
+    parse_test_input("cd /usr/local/bin")
+    parse_test_input("echo hello > output.txt")
+    parse_test_input("cat < input.txt")
+    parse_test_input("grep pattern file | sort | uniq")
+    parse_test_input("sleep 10 &")
 
 # Test control structures
 def test_control_structures():
     print("\n==== Control Structures ====")
-    test_parser("if test -f /etc/passwd; then echo exists; fi")
-    test_parser("if [ -d /tmp ]; then echo 'tmp exists'; else echo 'no tmp'; fi")
-    test_parser("if echo hello; then echo yes; elif echo maybe; then echo perhaps; else echo no; fi")
-    test_parser("while true; do echo loop; sleep 1; done")
-    test_parser("until [ -f /tmp/flag ]; do echo waiting; sleep 1; done")
-    test_parser("for i in 1 2 3; do echo $i; done")
-    test_parser("for file in *.txt; do wc -l $file; done")
+    parse_test_input("if test -f /etc/passwd; then echo exists; fi")
+    parse_test_input("if [ -d /tmp ]; then echo 'tmp exists'; else echo 'no tmp'; fi")
+    parse_test_input("if echo hello; then echo yes; elif echo maybe; then echo perhaps; else echo no; fi")
+    parse_test_input("while true; do echo loop; sleep 1; done")
+    parse_test_input("until [ -f /tmp/flag ]; do echo waiting; sleep 1; done")
+    parse_test_input("for i in 1 2 3; do echo $i; done")
+    parse_test_input("for file in *.txt; do wc -l $file; done")
 
 # Test case statements
 def test_case_statements():
     print("\n==== Case Statements ====")
-    test_parser("case $1 in a) echo A;; b) echo B;; *) echo default;; esac")
-    test_parser("case $option in\n  -h|--help) show_help;;\n  -v|--version) show_version;;\n  *) echo \"Unknown option\";;\nesac")
+    parse_test_input("case $1 in a) echo A;; b) echo B;; *) echo default;; esac")
+    parse_test_input("case $option in\n  -h|--help) show_help;;\n  -v|--version) show_version;;\n  *) echo \"Unknown option\";;\nesac")
 
 # Test function definitions
 def test_function_definitions():
     print("\n==== Function Definitions ====")
-    test_parser("function hello() { echo hello world; }")
-    test_parser("function greet { echo \"Hello, $1!\"; }")
+    parse_test_input("function hello() { echo hello world; }")
+    parse_test_input("function greet { echo \"Hello, $1!\"; }")
 
 # Test complex scripts
 def test_complex_scripts():
@@ -146,7 +144,7 @@ for file in *.txt; do
     esac
 done
 """
-    test_parser(script, compare_with_old=False)  # Too complex for old parser, only test new one
+    parse_test_input(script)  # Test with the new parser
 
 # Run all tests
 if __name__ == "__main__":

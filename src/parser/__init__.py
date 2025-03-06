@@ -5,30 +5,47 @@ This module provides the parser for shell scripts, with a modern implementation
 using grammar rules and better error handling.
 """
 
-import warnings
-
 # Import expander & quotes modules which are still supported here
 from .expander import expand_variables, expand_command_substitution
 from .quotes import handle_quotes, is_quoted, strip_quotes
 
-# Import the new implementation through the compatibility layer
-warnings.warn(
-    "The parser module is transitioning to a new implementation. "
-    "For new code, consider using the new parser API directly: "
-    "from src.parser.new.parser import ShellParser",
-    DeprecationWarning,
-    stacklevel=2
-)
+# Import the new parser implementation
+from .new.parser.shell_parser import ShellParser
+from .new.token_types import Token, TokenType
+from .new.lexer import tokenize
+from .new.redirection import RedirectionParser
 
-# For backward compatibility, we still provide the Parser class
-from .parser import Parser
+# Make RedirectionParser methods available at the module level for compatibility
+parse_redirections = RedirectionParser.parse_redirections
+split_pipeline = RedirectionParser.split_pipeline
+
+# Re-export the AST nodes
+from .ast import (
+    Node, CommandNode, PipelineNode, IfNode, WhileNode, 
+    ForNode, CaseNode, ListNode, FunctionNode, CaseItem
+)
 
 # Export the public API
 __all__ = [
-    'Parser',
+    'ShellParser',
+    'Token',
+    'TokenType',
+    'tokenize',
+    'parse_redirections',
+    'split_pipeline',
     'expand_variables',
     'expand_command_substitution',
     'handle_quotes',
     'is_quoted',
     'strip_quotes',
+    'Node',
+    'CommandNode',
+    'PipelineNode',
+    'IfNode',
+    'WhileNode',
+    'ForNode',
+    'CaseNode',
+    'ListNode',
+    'FunctionNode',
+    'CaseItem'
 ]
