@@ -5,8 +5,8 @@ import sys
 import signal
 from typing import List, Tuple, Dict, Optional
 
-from ..parser.new.token_types import Token, TokenType, create_word_token
-from ..parser.new.redirection import RedirectionParser
+from ..parser.token_types import Token, TokenType, create_word_token
+from ..parser.redirection import RedirectionParser
 from ..parser.expander import expand_all, expand_command_substitution
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController
