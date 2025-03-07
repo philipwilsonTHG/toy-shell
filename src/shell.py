@@ -9,9 +9,9 @@ from .context import SHELL
 from .utils.terminal import TerminalController
 from .utils.history import HistoryManager
 from .utils.completion import Completer
-from .parser.new.token_types import Token, TokenType, create_word_token
-from .parser.new.lexer import tokenize
-from .parser.new.parser.shell_parser import ShellParser
+from .parser.token_types import Token, TokenType, create_word_token
+from .parser.lexer import tokenize
+from .parser.parser.shell_parser import ShellParser
 from .parser.expander import expand_variables
 from .config.manager import ConfigManager
 from .execution.pipeline import PipelineExecutor
@@ -111,7 +111,7 @@ class Shell:
             
             # Try parsing the line with the new parser
             # First tokenize the input to properly handle pipelines
-            from .parser.new.lexer import tokenize
+            from .parser.lexer import tokenize
             tokens = tokenize(line)
             
             # Use tokens with parse method for better pipeline handling
@@ -145,7 +145,7 @@ class Shell:
                     print(f"  Token {i}: '{token.value}' ({token.token_type})", file=sys.stderr)
                 
                 # Debug the redirections
-                from .parser.new.redirection import RedirectionParser
+                from .parser.redirection import RedirectionParser
                 cmd_tokens, redirections = RedirectionParser.parse_redirections(tokens)
                 print("[DEBUG] Parsed redirections:", file=sys.stderr)
                 for op, target in redirections:

@@ -10,10 +10,10 @@ from .expander import expand_variables, expand_command_substitution
 from .quotes import handle_quotes, is_quoted, strip_quotes
 
 # Import the new parser implementation
-from .new.parser.shell_parser import ShellParser
-from .new.token_types import Token, TokenType
-from .new.lexer import tokenize
-from .new.redirection import RedirectionParser
+from .parser.shell_parser import ShellParser
+from .token_types import Token, TokenType
+from .lexer import tokenize
+from .redirection import RedirectionParser
 
 # Make RedirectionParser methods available at the module level for compatibility
 parse_redirections = RedirectionParser.parse_redirections

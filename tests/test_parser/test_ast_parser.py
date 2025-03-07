@@ -5,7 +5,7 @@ from src.parser.ast import (
     CommandNode, PipelineNode, IfNode, WhileNode, 
     ForNode, CaseNode, ListNode
 )
-from src.parser.new.parser.shell_parser import ShellParser
+from src.parser.parser.shell_parser import ShellParser
 from src.execution.ast_executor import ASTExecutor
 
 def test_basic_command_parsing():
@@ -19,10 +19,10 @@ def test_basic_command_parsing():
 
 def test_pipeline_parsing():
     # Using the token-based API directly for pipeline parsing
-    from src.parser.new.lexer import tokenize
-    from src.parser.new.parser.rules import PipelineRule
-    from src.parser.new.parser.token_stream import TokenStream
-    from src.parser.new.parser.parser_context import ParserContext
+    from src.parser.lexer import tokenize
+    from src.parser.parser.rules import PipelineRule
+    from src.parser.parser.token_stream import TokenStream
+    from src.parser.parser.parser_context import ParserContext
     
     # Set up the tokens, stream and context
     tokens = tokenize("echo hello | grep hello")
@@ -93,6 +93,12 @@ def test_for_loop():
     assert isinstance(node.body, CommandNode)
 
 def test_case_statement():
+    # Using the token-based API directly for case parsing
+    from src.parser.lexer import tokenize
+    from src.parser.parser.rules import CaseStatementRule
+    from src.parser.parser.token_stream import TokenStream
+    from src.parser.parser.parser_context import ParserContext
+    
     # Skip this test for now as the case parser is complex and needs specific setup
     # that direct rule application doesn't provide
     pytest.skip("Case statement parsing needs enhanced testing approach")
