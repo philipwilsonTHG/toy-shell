@@ -8,6 +8,7 @@ from .env import export, unset
 from .jobs import jobs, bg, fg
 from .history import history
 from .eval import eval_expr
+from .test import test_command
 
 # Map of builtin command names to their implementations
 BUILTINS: Dict[str, Callable[..., Any]] = {
@@ -22,5 +23,7 @@ BUILTINS: Dict[str, Callable[..., Any]] = {
     "history": history,
     "eval": eval_expr,
     ".": source,
-    "source": source
+    "source": source,
+    "test": test_command,
+    "[": test_command
 }

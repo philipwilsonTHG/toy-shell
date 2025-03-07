@@ -50,6 +50,10 @@ class Shell:
     def execute_line(self, line: str) -> Optional[int]:
         """Execute a line of input"""
         try:
+            # Debug output
+            if self.debug_mode:
+                print(f"[DEBUG] Executing line: {line[:50]}{'...' if len(line) > 50 else ''}", file=sys.stderr)
+                
             # Skip empty lines and comments
             line = line.strip()
             if not line or line.startswith('#'):
@@ -162,6 +166,9 @@ class Shell:
             
             # Use tokens with parse method for better pipeline handling
             node = self.parser.parse(tokens)
+            
+            if self.debug_mode:
+                print(f"[DEBUG] Parse result type: {type(node)}", file=sys.stderr)
             
             if node:
                 # Successfully parsed an AST, execute it
@@ -284,6 +291,9 @@ def main():
     debug_mode = False
     args = sys.argv[1:]
     
+    # For debugging - disabled
+    # print(f"DEBUG: Command line arguments: {args}", file=sys.stderr)
+    
     # Check for help
     if "-h" in args or "--help" in args:
         print("Usage: psh [OPTIONS] [SCRIPT_FILE | -c COMMAND]")
@@ -301,6 +311,21 @@ def main():
     if "--debug" in args:
         debug_mode = True
         args.remove("--debug")
+    
+    # Handle joined arguments like "--debug examples/debug_example.sh"
+    for i, arg in enumerate(args):
+        if arg.startswith("--debug "):
+            debug_mode = True
+            # Extract the script path from the argument
+            script_part = arg[len("--debug "):]
+            args[i] = script_part
+            break
+        elif i == 0 and len(args) == 1 and " " in arg:
+            # Special case: the only argument contains a space
+            parts = arg.split(" ", 1)
+            if parts[0] == "--debug":
+                debug_mode = True
+                args[0] = parts[1]  # Set the script path
     
     shell = Shell(debug_mode=debug_mode)
     
@@ -322,9 +347,43 @@ def main():
             script_path = args[0]
             try:
                 with open(script_path) as f:
-                    # Read entire script and execute it as a whole
+                    # Read entire script
                     script_content = f.read()
-                    return shell.execute_line(script_content) or 0
+                    
+                    # Create a special script execution shell
+                    script_shell = Shell(debug_mode=debug_mode)
+                    
+                    # Skip shebang line if present
+                    lines = script_content.split('\n')
+                    
+                    if lines and lines[0].startswith('#!'):
+                        if debug_mode:
+                            print(f"[DEBUG] Skipping shebang line: {lines[0]}", file=sys.stderr)
+                        start_line = 1
+                    else:
+                        start_line = 0
+                    
+                    # Process script line by line, skipping comments and empty lines
+                    exit_status = 0
+                    for i in range(start_line, len(lines)):
+                        line = lines[i].strip()
+                        if not line or line.startswith('#'):
+                            continue
+                            
+                        if debug_mode:
+                            print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
+                            
+                        try:
+                            result = script_shell.execute_line(line)
+                            if result is not None:
+                                exit_status = result
+                        except Exception as e:
+                            if debug_mode:
+                                print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
+                            exit_status = 1
+                            break
+                    
+                    return exit_status
             except Exception as e:
                 print(f"Error running script {script_path}: {e}", file=sys.stderr)
                 if debug_mode:

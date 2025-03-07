@@ -19,11 +19,11 @@ for i in 1 2 3; do
 done
 
 # While loop
-counter=3
-while [ $counter -gt 0 ]; do
-    echo "Countdown: $counter"
-    counter=$((counter - 1))
-done
+#counter=3
+#while [ $counter -gt 0 ]; do
+#    echo "Countdown: $counter"
+#    counter=$((counter - 1))
+#done
 
 # Case statement
 animal="dog"
