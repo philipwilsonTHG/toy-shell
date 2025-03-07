@@ -10,6 +10,7 @@ class TokenType(Enum):
     OPERATOR = "operator"     # Operators like |, &, ;
     KEYWORD = "keyword"       # Shell keywords like if, while, for
     SUBSTITUTION = "substitution"  # Command substitution like $() or ``
+    ARITHMETIC = "arithmetic"  # Arithmetic expansion like $(( expr ))
     REDIRECTION = "redirection"  # Redirection operators
 
 @dataclass
@@ -90,3 +91,7 @@ def create_word_token(value: str, quoted: bool = False) -> Token:
 def create_substitution_token(value: str) -> Token:
     """Create a token for a command substitution"""
     return Token(value, TokenType.SUBSTITUTION)
+    
+def create_arithmetic_token(value: str) -> Token:
+    """Create a token for an arithmetic expansion"""
+    return Token(value, TokenType.ARITHMETIC)

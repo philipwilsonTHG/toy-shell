@@ -66,6 +66,93 @@ def expand_variables(text: str) -> str:
     
     return text
 
+def expand_arithmetic(text: str) -> str:
+    """Expand $(( expression )) arithmetic expansions using Python's eval()"""
+    
+    # Handle $(( expression )) format
+    if text.startswith('$((') and text.endswith('))'):
+        expression = text[3:-2].strip()
+    else:
+        return text
+    
+    if not expression:
+        return '0'  # Empty expressions evaluate to 0 in POSIX shells
+    
+    # First, handle nested arithmetic expressions like $((1 + $((2 * 3))))
+    nested_pattern = r'\$\(\(([^()]*(?:\([^()]*\)[^()]*)*)\)\)'
+    while re.search(nested_pattern, expression):
+        def replace_nested(match):
+            inner_expr = match.group(0)
+            inner_result = expand_arithmetic(inner_expr)
+            return inner_result
+        
+        expression = re.sub(nested_pattern, replace_nested, expression)
+    
+    # Replace shell variables with their values
+    var_pattern = r'\$([a-zA-Z_][a-zA-Z0-9_]*)'
+    def replace_var(match):
+        var_name = match.group(1)
+        # Get value from environment, default to 0 if not found
+        value = os.environ.get(var_name, '0')
+        # Ensure the value is a number, default to 0 if not
+        try:
+            float(value)  # Just to check if it's a valid number
+            return value
+        except ValueError:
+            return '0'
+        
+    expression = re.sub(var_pattern, replace_var, expression)
+    
+    # Convert shell-style operators to Python equivalents
+    expression = expression.replace('&&', ' and ')
+    expression = expression.replace('||', ' or ')
+    expression = expression.replace('!', ' not ')
+    
+    # Handle ternary operator: a ? b : c -> b if a else c
+    ternary_pattern = r'([^?]+)\?([^:]+):(.+)'
+    ternary_match = re.search(ternary_pattern, expression)
+    if ternary_match:
+        cond = ternary_match.group(1).strip()
+        true_val = ternary_match.group(2).strip()
+        false_val = ternary_match.group(3).strip()
+        expression = f"({true_val} if {cond} else {false_val})"
+    
+    # Evaluate using Python's eval() with a restricted namespace
+    try:
+        # Create a safe subset of allowed functions/operators
+        safe_dict = {
+            'abs': abs, 'int': int, 'float': float,
+            'min': min, 'max': max, 'round': round
+        }
+        
+        # Set a timeout to prevent infinite loops
+        import signal
+        
+        def timeout_handler(signum, frame):
+            raise TimeoutError("Evaluation timed out")
+        
+        # Set 1-second timeout
+        signal.signal(signal.SIGALRM, timeout_handler)
+        signal.alarm(1)
+        
+        # Evaluate the expression
+        result = eval(expression, {"__builtins__": {}}, safe_dict)
+        
+        # Cancel the alarm
+        signal.alarm(0)
+        
+        # Convert to integer if it's a float with no decimal part
+        if isinstance(result, float) and result.is_integer():
+            result = int(result)
+        # Convert booleans to integers (True->1, False->0)
+        elif isinstance(result, bool):
+            result = 1 if result else 0
+        
+        return str(result)
+    except Exception as e:
+        print(f"Error in arithmetic expansion: {e}")
+        return "0"  # Default to 0 on errors, like bash does
+
 def expand_command_substitution(text: str) -> str:
     """Expand $(command) and `command` substitutions in text"""
     
@@ -160,6 +247,13 @@ def expand_all(text: str) -> str:
         content = text[1:-1]
         result = expand_variables(content)
         
+        # Handle arithmetic expansion inside double quotes (high priority)
+        arith_pattern = r'\$\(\(([^()]*(?:\([^()]*\)[^()]*)*)\)\)'
+        while re.search(arith_pattern, result):
+            def expand_arith(match):
+                return expand_arithmetic(match.group(0))
+            result = re.sub(arith_pattern, expand_arith, result)
+        
         # Handle command substitution inside double quotes
         cmd_pattern = r'\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)'
         while re.search(cmd_pattern, result):
@@ -178,6 +272,13 @@ def expand_all(text: str) -> str:
     
     # For non-quoted text, do all expansions in proper order
     result = expand_variables(text)
+    
+    # Find and expand all arithmetic expansions (highest priority)
+    arith_pattern = r'\$\(\(([^()]*(?:\([^()]*\)[^()]*)*)\)\)'
+    while re.search(arith_pattern, result):
+        def expand_arith(match):
+            return expand_arithmetic(match.group(0))
+        result = re.sub(arith_pattern, expand_arith, result)
     
     # Find and expand all command substitutions
     cmd_pattern = r'\$\(([^()]*(?:\([^()]*\)[^()]*)*)\)'

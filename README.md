@@ -9,6 +9,8 @@ A feature-rich Unix shell implemented in Python with modern features and robust 
 - Command history with search
 - Environment variable management
 - Command substitution $(command)
+- Arithmetic expansion $(( expression ))
+- Control structures (if, for, while, case)
 - Proper signal handling
 - Configurable prompt
 - Tab completion
@@ -73,11 +75,31 @@ echo $VAR         # Use variable
 echo ${VAR}       # Use variable (alternative)
 ```
 
+### Variable Expansion and Quoting
+```bash
+# Different types of quoting affect variable expansion
+echo "$VAR"       # Variables are expanded within double quotes
+echo '$VAR'       # Variables are NOT expanded within single quotes
+echo \$VAR        # Escaped variables are treated literally
+
+# Important: When running commands from a shell, use single quotes to preserve $ signs
+psh -c 'for i in 1 2 3; do echo $i; done'  # Works correctly
+psh -c "for i in 1 2 3; do echo \$i; done" # Needs double escaping if using double quotes
+```
+
 ### Command Substitution
 ```bash
 echo "Date: $(date)"
 files=$(ls)
 path=$(pwd)/file
+```
+
+### Arithmetic Expansion
+```bash
+echo $((1 + 2))       # Basic arithmetic
+echo $((x * 5))       # Using variables
+echo $((1 + $((2 * 3))))  # Nested expressions
+echo $((x > y ? x : y))   # Ternary operator
 ```
 
 ### Redirections
@@ -125,6 +147,21 @@ histfile="~/.psh_history"
 debug=false
 ```
 
+## Implementation Notes
+
+### Parser Evolution
+The shell has undergone a significant parser upgrade to improve reliability and expand feature support:
+
+1. **Legacy Parser**: Original implementation using recursive descent parsing
+2. **New Parser**: Modern implementation with:
+   - Grammar-based rules for each shell construct
+   - Better error handling and reporting
+   - Improved token management
+   - Proper support for control structures
+   - Cleaner separation of concerns
+
+The new parser provides better maintainability and extensibility, allowing for easier addition of new shell features.
+
 ## Project Structure
 
 ```
@@ -147,9 +184,19 @@ src/
 │   └── pipeline.py     # Pipeline execution
 ├── parser/             # Command parsing
 │   ├── __init__.py
+│   ├── ast.py          # Abstract Syntax Tree nodes
 │   ├── expander.py     # Variable/command expansion
-│   ├── lexer.py        # Command tokenization
-│   └── quotes.py       # Quote handling
+│   ├── parser.py       # Main parser (legacy)
+│   ├── quotes.py       # Quote handling
+│   └── new/            # New parser implementation
+│       ├── token_types.py  # Token types and definitions
+│       ├── lexer.py        # Lexical analysis
+│       ├── redirection.py  # Redirection handling
+│       └── parser/         # Grammar-based parser
+│           ├── grammar_rule.py   # Base grammar rule class
+│           ├── shell_parser.py   # Main parser implementation
+│           ├── token_stream.py   # Token stream management
+│           └── rules/           # Grammar rules for different constructs
 ├── shell.py            # Main shell implementation
 └── utils/              # Utility functions
     ├── __init__.py

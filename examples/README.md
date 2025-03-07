@@ -26,3 +26,22 @@ Run it with:
 ```
 psh examples/for_loop.sh
 ```
+
+## Arithmetic Expansion Example
+
+The `arithmetic.sh` script demonstrates the arithmetic expansion feature using the `$(( expression ))` syntax. It includes:
+- Basic arithmetic operations
+- Variable usage in expressions
+- Operator precedence
+- Logical operators
+- Comparison operators
+- Ternary operator
+- Nested arithmetic expressions
+- Using arithmetic in control structures
+- A factorial calculation example
+
+Run it with:
+
+```
+psh examples/arithmetic.sh
+```

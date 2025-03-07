@@ -3,7 +3,7 @@
 from typing import List, Tuple, Dict, Optional, Set
 import re
 
-from .token_types import Token, TokenType, KEYWORDS, create_word_token, create_operator_token, create_substitution_token
+from .token_types import Token, TokenType, KEYWORDS, create_word_token, create_operator_token, create_substitution_token, create_arithmetic_token
 from .redirection import RedirectionParser, RedirectionType
 
 class Lexer:
@@ -180,14 +180,54 @@ class Lexer:
         return i + 1
     
     def handle_variable_or_substitution(self, line: str, i: int) -> int:
-        """Handle $ (variable or command substitution)"""
+        """Handle $ (variable, command substitution, or arithmetic expansion)"""
         # If we're in single quotes, treat as literal
         if self.in_single_quote:
             self.buffer.append('$')
             return i + 1
         
+        # Check for $(( expression )) arithmetic expansion
+        if i + 2 < len(line) and line[i + 1] == '(' and line[i + 2] == '(':
+            if self.buffer:
+                self.tokens.append(create_word_token(''.join(self.buffer)))
+                self.buffer = []
+            
+            # Extract the expression inside $(( ))
+            expr_start = i + 3
+            expr_end = expr_start
+            paren_count = 2  # Start with 2 for the double parentheses
+            sub_escaped = False
+            
+            while expr_end < len(line) and paren_count > 0:
+                if sub_escaped:
+                    sub_escaped = False
+                    expr_end += 1
+                    continue
+                
+                if line[expr_end] == '(' and not sub_escaped:
+                    paren_count += 1
+                elif line[expr_end] == ')' and not sub_escaped:
+                    paren_count -= 1
+                elif line[expr_end] == '\\':
+                    sub_escaped = True
+                
+                expr_end += 1
+                
+                if expr_end >= len(line) and paren_count > 0:
+                    raise ValueError("Unterminated arithmetic expansion")
+            
+            expr_end -= 1  # adjust for the last increment
+            
+            # Check if we ended with double parenthesis
+            if expr_end >= 1 and line[expr_end] == ')' and line[expr_end - 1] == ')':
+                # Create an arithmetic token with the entire $(( )) expression
+                self.tokens.append(create_arithmetic_token(line[i:expr_end + 1]))
+                return expr_end + 1
+            else:
+                raise ValueError("Malformed arithmetic expansion, expected double parenthesis '$(( expr ))'")
+            
         # Check for $() command substitution
-        if i + 1 < len(line) and line[i + 1] == '(':
+        elif i + 1 < len(line) and line[i + 1] == '(':
             if self.buffer:
                 self.tokens.append(create_word_token(''.join(self.buffer)))
                 self.buffer = []
