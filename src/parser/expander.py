@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from typing import Optional, Match
 from .quotes import is_quoted, strip_quotes, handle_quotes
@@ -135,8 +136,16 @@ def expand_arithmetic(text: str) -> str:
         signal.signal(signal.SIGALRM, timeout_handler)
         signal.alarm(1)
         
+        # Create a namespace where undefined variables evaluate to 0 (POSIX behavior)
+        class PosixNamespace(dict):
+            def __missing__(self, key):
+                return 0
+        
+        namespace = PosixNamespace()
+        namespace.update(safe_dict)
+        
         # Evaluate the expression
-        result = eval(expression, {"__builtins__": {}}, safe_dict)
+        result = eval(expression, {"__builtins__": {}}, namespace)
         
         # Cancel the alarm
         signal.alarm(0)
@@ -150,7 +159,7 @@ def expand_arithmetic(text: str) -> str:
         
         return str(result)
     except Exception as e:
-        print(f"Error in arithmetic expansion: {e}")
+        print(f"Error in arithmetic expansion: {e}", file=sys.stderr)
         return "0"  # Default to 0 on errors, like bash does
 
 def expand_command_substitution(text: str) -> str:

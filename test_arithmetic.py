@@ -36,6 +36,40 @@ class TestArithmeticExpansion(unittest.TestCase):
         
         for input_expr, expected in test_cases:
             self.assertEqual(expand_arithmetic(input_expr), expected)
+            
+    def test_undefined_variables_in_arithmetic(self):
+        """Test arithmetic with undefined variables (should evaluate to 0)"""
+        # Ensure the test variables are truly undefined
+        if 'UNDEFINED1' in os.environ:
+            del os.environ['UNDEFINED1']
+        if 'UNDEFINED2' in os.environ:
+            del os.environ['UNDEFINED2']
+            
+        test_cases = [
+            # Basic undefined variable
+            ('$((undefined))', '0'),
+            # Multiple undefined variables
+            ('$((undefined1 + undefined2))', '0'),
+            # Mixed defined and undefined
+            ('$((10 + undefined))', '10'),
+            # Operations with undefined
+            ('$((undefined * 5))', '0'),
+            ('$((undefined / 1))', '0'),
+            # Complex expressions
+            ('$((undefined1 * undefined2 + 10))', '10'),
+            # Comparisons with undefined
+            ('$((undefined > 0 ? 1 : 0))', '0'),
+            # Nested expressions with undefined
+            ('$((1 + $((undefined * 3))))', '1'),
+            # Using $VAR syntax
+            ('$(($UNDEFINED1 + 5))', '5'),
+            # Logical operations
+            ('$((undefined && 1))', '0'),
+            ('$((1 || undefined))', '1')
+        ]
+        
+        for input_expr, expected in test_cases:
+            self.assertEqual(expand_arithmetic(input_expr), expected)
     
     def test_complex_expressions(self):
         """Test more complex arithmetic expressions"""
