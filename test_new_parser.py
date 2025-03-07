@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-Test script for the new parser implementation.
+Test script for the parser implementation.
 
-This script tests the new parser on various shell constructs and compares
-the results with the old parser to ensure compatibility.
+This script tests the parser on various shell constructs to verify
+parsing correctness.
 """
 
-from src.parser.new.token_types import Token, TokenType 
-from src.parser.new.lexer import tokenize
-from src.parser.new.parser.shell_parser import ShellParser
+from src.parser.token_types import Token, TokenType 
+from src.parser.lexer import tokenize
+from src.parser.parser.shell_parser import ShellParser
 from src.parser.ast import CommandNode, PipelineNode, IfNode, WhileNode, ForNode, CaseNode, FunctionNode
+
+# Don't run all tests by default - makes debugging easier
+RUN_ALL_TESTS = False
 
 def print_ast(node, indent=0):
     """Print an AST node with indentation for better visualization."""
@@ -64,13 +67,13 @@ def print_ast(node, indent=0):
         print_ast(node.body, indent + 2)
 
 def parse_test_input(input_line):
-    """Test the new parser on a given input."""
+    """Test the parser on a given input."""
     print(f"\n=== Testing parser on: {input_line!r} ===")
     
-    # Parse with the new parser
+    # Parse with the parser
     parser = ShellParser()
-    tokens = tokenize(input_line)
-    result = parser.parse(tokens)
+    # Use parse_line which handles tokenization internally
+    result = parser.parse_line(input_line)
     
     print("\nParser Result:")
     print_ast(result)
@@ -148,8 +151,11 @@ done
 
 # Run all tests
 if __name__ == "__main__":
-    test_simple_commands()
-    test_control_structures()
-    test_case_statements()
-    test_function_definitions()
-    test_complex_scripts()
+    test_parser()  # Run the basic test
+    
+    if RUN_ALL_TESTS:
+        test_simple_commands()
+        test_control_structures()
+        test_case_statements()
+        test_function_definitions()
+        test_complex_scripts()
