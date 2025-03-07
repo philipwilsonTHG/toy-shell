@@ -31,6 +31,9 @@ class Shell:
         # Initialize the new parser
         self.parser = ShellParser()
         
+        # Track last command's exit status
+        self.last_exit_status = 0
+        
         # Flag to prevent infinite loops during test collection
         self.collecting_tests = os.environ.get('PYTEST_RUNNING') == '1'
         
@@ -51,6 +54,49 @@ class Shell:
             line = line.strip()
             if not line or line.startswith('#'):
                 return 0
+            
+            # Special handling for commands separated by semicolons
+            if ';' in line:
+                # Simple semicolon handling without accounting for quotes
+                from .parser.quotes import handle_quotes
+                
+                # Preserve quotes when splitting on semicolons
+                commands = []
+                current_cmd = []
+                in_single_quote = False
+                in_double_quote = False
+                
+                for char in line:
+                    if char == "'" and not in_double_quote:
+                        in_single_quote = not in_single_quote
+                        current_cmd.append(char)
+                    elif char == '"' and not in_single_quote:
+                        in_double_quote = not in_double_quote
+                        current_cmd.append(char)
+                    elif char == ';' and not (in_single_quote or in_double_quote):
+                        if current_cmd:
+                            commands.append(''.join(current_cmd).strip())
+                            current_cmd = []
+                    else:
+                        current_cmd.append(char)
+                
+                # Add final command if any
+                if current_cmd:
+                    commands.append(''.join(current_cmd).strip())
+                
+                # Execute each command in sequence
+                last_status = 0
+                for cmd in commands:
+                    if cmd:  # Skip empty commands
+                        result = self.execute_line(cmd)
+                        if result is not None:
+                            last_status = result
+                
+                return last_status
+                
+            # Handle $? special variable expansion
+            if "$?" in line:
+                line = line.replace("$?", str(self.last_exit_status))
                 
             # Handle version command directly
             if line == "version":
@@ -192,8 +238,14 @@ class Shell:
                     line = input()
                     
                 result = self.execute_line(line)
-            
+                
+                # Store the exit status for $? variable
                 if result is not None:
+                    self.last_exit_status = result
+                    
+                    # Set $? environment variable
+                    os.environ["?"] = str(self.last_exit_status)
+                
                     # Check for special exit code (-1000 to -1255) indicating explicit exit
                     if isinstance(result, list):
                         result = result[0]

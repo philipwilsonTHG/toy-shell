@@ -3,6 +3,7 @@
 import os
 import sys
 import signal
+import re
 from typing import List, Tuple, Dict, Optional
 
 from ..parser.token_types import Token, TokenType, create_word_token
@@ -126,19 +127,23 @@ class RedirectionHandler:
                 saved_fds[src_fd] = os.dup(src_fd)
             
             # Handle different redirection types
-            if op == '>' or op.endswith('>'):
-                # Handle normal file redirection
-                fd = os.open(target, self.O_WRONLY | self.O_CREAT | self.O_TRUNC, 0o644)
-                os.dup2(fd, src_fd)
-                os.close(fd)
-            elif op == '>>' or op.endswith('>>'):
-                fd = os.open(target, self.O_WRONLY | self.O_CREAT | self.O_APPEND, 0o644)
-                os.dup2(fd, src_fd)
-                os.close(fd)
-            elif op == '<':
-                fd = os.open(target, self.O_RDONLY)
-                os.dup2(fd, src_fd)
-                os.close(fd)
+            try:
+                if op == '>' or op.endswith('>'):
+                    # Handle normal file redirection
+                    fd = os.open(target, self.O_WRONLY | self.O_CREAT | self.O_TRUNC, 0o644)
+                    os.dup2(fd, src_fd)
+                    os.close(fd)
+                elif op == '>>' or op.endswith('>>'):
+                    fd = os.open(target, self.O_WRONLY | self.O_CREAT | self.O_APPEND, 0o644)
+                    os.dup2(fd, src_fd)
+                    os.close(fd)
+                elif op == '<':
+                    fd = os.open(target, self.O_RDONLY)
+                    os.dup2(fd, src_fd)
+                    os.close(fd)
+            except Exception as e:
+                print(f"Redirection error: {e}", file=sys.stderr)
+                os._exit(1)
         
         # Now process descriptor redirections like 2>&1
         # These are processed after regular redirections to ensure stdout is already pointing to the right place
@@ -288,6 +293,20 @@ class PipelineExecutor:
             # Get command and arguments
             cmd = expanded_tokens[0]
             args = expanded_tokens
+            
+            # Check for variable assignment (VAR=value)
+            assignment_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)', cmd)
+            if assignment_match and i == 0 and len(segments) == 1 and len(args) == 1:
+                var_name = assignment_match.group(1)
+                var_value = assignment_match.group(2)
+                
+                # Strip quotes if present
+                if (var_value.startswith('"') and var_value.endswith('"')) or \
+                   (var_value.startswith("'") and var_value.endswith("'")):
+                    var_value = var_value[1:-1]
+                    
+                os.environ[var_name] = var_value
+                return 0  # Return success for variable assignment
             
             # Check for builtin (but only for simple commands, not in pipelines)
             if i == 0 and len(segments) == 1:

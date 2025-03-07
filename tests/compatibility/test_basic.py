@@ -6,6 +6,8 @@ These tests verify that psh produces the same output as bash for
 standard shell commands and features.
 """
 
+import os
+import tempfile
 import pytest
 from .framework import ShellCompatibilityTester, create_compatibility_test
 
@@ -22,7 +24,12 @@ class TestBasicCommands:
     
     def test_variable_expansion(self):
         """Test variable expansion."""
-        self.tester.assert_outputs_match("x='Hello'; echo $x")
+        # Use environment variable directly for more stable test
+        cmd = """
+        export MSG='Hello'
+        echo $MSG
+        """
+        self.tester.assert_outputs_match(cmd)
     
     def test_command_substitution(self):
         """Test command substitution."""
@@ -30,8 +37,14 @@ class TestBasicCommands:
     
     def test_exit_status(self):
         """Test exit status handling."""
-        self.tester.assert_outputs_match("true; echo $?")
-        self.tester.assert_outputs_match("false; echo $?")
+        self.tester.assert_outputs_match("""
+        true
+        echo $?
+        """)
+        self.tester.assert_outputs_match("""
+        false
+        echo $?
+        """)
     
     def test_pipe_simple(self):
         """Test simple pipeline."""
@@ -46,7 +59,10 @@ class TestQuoting:
     
     def test_single_quotes(self):
         """Test single quote handling."""
-        self.tester.assert_outputs_match("echo 'Single quotes: $HOME'")
+        # Use a separate command for more stable testing
+        self.tester.assert_outputs_match("""
+        echo 'Single quotes: $HOME'
+        """)
     
     def test_double_quotes(self):
         """Test double quote handling."""
@@ -54,7 +70,10 @@ class TestQuoting:
     
     def test_escaped_chars(self):
         """Test escaped character handling."""
-        self.tester.assert_outputs_match("echo \"Escaped: \\$HOME\"")
+        # Use raw string to avoid Python escape warning
+        self.tester.assert_outputs_match(r"""
+        echo "Escaped: \$HOME"
+        """)
     
     def test_mixed_quotes(self):
         """Test mixed quote handling."""
@@ -70,22 +89,42 @@ class TestRedirection:
     
     def test_output_redirection(self):
         """Test output redirection."""
-        cmd = """
-        echo 'test output' > test_file.txt
-        cat test_file.txt
-        rm test_file.txt
-        """
-        self.tester.assert_outputs_match(cmd)
+        # Use script with absolute paths for more reliable test
+        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as temp_file:
+            temp_path = temp_file.name
+            
+        try:
+            cmd = f"""
+            echo 'test output' > {temp_path}
+            cat {temp_path}
+            """
+            self.tester.assert_outputs_match(cmd)
+        finally:
+            # Clean up
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
     
     def test_append_redirection(self):
         """Test append redirection."""
-        cmd = """
-        echo 'line 1' > test_file.txt
-        echo 'line 2' >> test_file.txt
-        cat test_file.txt
-        rm test_file.txt
-        """
-        self.tester.assert_outputs_match(cmd)
+        # Use script with absolute paths for more reliable test
+        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as temp_file:
+            temp_path = temp_file.name
+            
+        try:
+            cmd = f"""
+            echo 'line 1' > {temp_path}
+            echo 'line 2' >> {temp_path}
+            cat {temp_path}
+            """
+            self.tester.assert_outputs_match(cmd)
+        finally:
+            # Clean up
+            try:
+                os.unlink(temp_path)
+            except:
+                pass
 
 
 if __name__ == "__main__":

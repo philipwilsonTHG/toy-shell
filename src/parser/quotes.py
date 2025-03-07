@@ -23,25 +23,55 @@ def handle_quotes(text: str) -> Tuple[str, bool, bool]:
     while i < len(text):
         char = text[i]
         
+        # Inside single quotes, everything is preserved literally
+        if in_single_quote:
+            # Single quotes don't allow escaping - everything is literal
+            result.append(char)
+            
+            # Only check for ending the single quote
+            if char == "'":
+                in_single_quote = False
+            
+            i += 1
+            continue
+            
         if escaped:
-            # For escaped quotes, remove the escape character
-            if char in '"\'':
+            # Inside double quotes, allow escaping of $ " \ `
+            if in_double_quote and char in '$"`\\':
+                result.append(char)
+            # Outside of quotes, allow escaping of any character
+            elif not in_double_quote:
                 result.append(char)
             else:
-                # For other escaped characters, keep the escape character
+                # Inside double quotes but not a special character to escape
                 result.append('\\')
                 result.append(char)
+                
             escaped = False
             i += 1
             continue
         
         if char == '\\':
-            escaped = True
-            i += 1
-            continue
+            # Escape character - but need to handle differently based on context
+            if in_double_quote:
+                # Inside double quotes, only escape $ " ` and \ 
+                if i+1 < len(text) and text[i+1] in '$"`\\':
+                    escaped = True
+                    i += 1
+                    continue
+                else:
+                    # Not a special escape char, preserve the backslash
+                    result.append(char)
+                    i += 1
+                    continue
+            else:
+                # Outside quotes, escape next character
+                escaped = True
+                i += 1
+                continue
         
         if char == "'" and not in_double_quote:
-            in_single_quote = not in_single_quote
+            in_single_quote = True
             result.append(char)
             i += 1
             continue

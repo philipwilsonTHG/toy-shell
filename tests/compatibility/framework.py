@@ -101,29 +101,45 @@ class ShellCompatibilityTester:
         Returns:
             CommandResult with stdout, stderr, and exit code
         """
-        # Set up base environment variables if not provided
-        if env is None:
-            env = os.environ.copy()
+        # Create a temporary script file for more reliable execution
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.sh', delete=False) as script_file:
+            script_path = script_file.name
+            # Use set -e to fail on error
+            script_file.write("#!/bin/bash\n")
+            script_file.write(input_text + "\n")
             
-        # Disable shell history for consistency
-        env["HISTFILE"] = "/dev/null"
-        env["HISTSIZE"] = "0"
+        # Make the script executable
+        os.chmod(script_path, 0o755)
             
-        # Run the shell process
-        process = subprocess.run(
-            shell_cmd + [input_text] if "-c" in shell_cmd else shell_cmd,
-            input=None if "-c" in shell_cmd else input_text.encode(),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=env,
-            universal_newlines=True
-        )
-        
-        return CommandResult(
-            stdout=process.stdout,
-            stderr=process.stderr,
-            exit_code=process.returncode
-        )
+        try:
+            # Set up base environment variables if not provided
+            if env is None:
+                env = os.environ.copy()
+                
+            # Disable shell history for consistency
+            env["HISTFILE"] = "/dev/null"
+            env["HISTSIZE"] = "0"
+                
+            # Run the shell process with the script
+            process = subprocess.run(
+                shell_cmd + [script_path],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+                universal_newlines=True
+            )
+            
+            return CommandResult(
+                stdout=process.stdout,
+                stderr=process.stderr,
+                exit_code=process.returncode
+            )
+        finally:
+            # Clean up the temporary script
+            try:
+                os.unlink(script_path)
+            except:
+                pass
     
     def run_in_psh(self, command: str, env: Optional[Dict[str, str]] = None) -> CommandResult:
         """Run a command in psh.
