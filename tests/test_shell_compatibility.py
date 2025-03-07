@@ -6,6 +6,8 @@ This file demonstrates how to use the compatibility framework to create
 tests that compare psh behavior with bash.
 """
 
+import os
+import tempfile
 import pytest
 from tests.compatibility import (
     ShellCompatibilityTester,
@@ -21,20 +23,58 @@ def test_simple_command():
     tester.assert_outputs_match("echo 'Hello, World!'")
 
 
-# Test using factory function
+# Test using factory function - simple test
 test_echo_with_factory = create_compatibility_test("echo 'Created with factory'")
 
+# Example of a multi-command test using the factory approach
+def create_factory_multi_command_test():
+    # Create a test file path using a predictable location
+    test_file = os.path.join(tempfile.gettempdir(), "factory_test.txt")
+    
+    # Create commands using absolute path
+    commands = [
+        f"echo 'Line 1' > {test_file}",
+        f"echo 'Line 2' >> {test_file}",
+        f"cat {test_file}"
+    ]
+    
+    # Setup and cleanup commands
+    setup = [f"rm -f {test_file}"]  # Make sure file doesn't exist at start
+    
+    # Create and return test function
+    test_func = create_multi_command_test(
+        commands=commands,
+        setup_commands=setup
+    )
+    
+    return test_func
 
-# Multi-command test
-test_multi_command = create_multi_command_test(
-    commands=[
-        "echo 'Step 1' > file.txt",
-        "echo 'Step 2' >> file.txt",
-        "cat file.txt",
-        "rm file.txt"
-    ],
-    setup_commands=["touch setup_marker"]
-)
+# Create the test
+test_factory_multi = create_factory_multi_command_test()
+
+
+# Multi-command test using a temporary file
+def test_multi_command():
+    with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as temp_file:
+        temp_path = temp_file.name
+    
+    try:
+        # Run sequence of commands on a temp file
+        commands = [
+            f"echo 'Step 1' > {temp_path}",
+            f"echo 'Step 2' >> {temp_path}",
+            f"cat {temp_path}"
+        ]
+        
+        tester = ShellCompatibilityTester()
+        for cmd in commands:
+            tester.assert_outputs_match(cmd)
+    finally:
+        # Clean up
+        try:
+            os.unlink(temp_path)
+        except:
+            pass
 
 
 # Parameterized test

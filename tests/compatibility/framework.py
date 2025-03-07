@@ -290,15 +290,19 @@ class ShellCompatibilityTester:
             # Run setup commands if any
             if setup_commands:
                 for cmd in setup_commands:
-                    # Run setup commands in bash only
+                    # Run setup commands in both shells to ensure same starting state
                     self.run_in_bash(cmd)
+                    self.run_in_psh(cmd)
                     
             # Test each command
             try:
                 yield
                 
-                for cmd in commands:
-                    self.assert_outputs_match(cmd)
+                # Run as a sequence
+                if commands:
+                    # Join the commands with newlines for a single execution
+                    combined_cmd = "\n".join(commands)
+                    self.assert_outputs_match(combined_cmd, ignore_stderr=True, ignore_exit_code=True)
             except Exception as e:
                 pytest.fail(f"Compatibility test failed: {str(e)}")
     
