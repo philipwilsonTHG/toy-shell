@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 
-from src.parser.new.lexer import tokenize
-from src.parser.new.redirection import RedirectionParser
-from src.parser.new.token_types import TokenType
+from src.parser.lexer import tokenize
+from src.parser.redirection import RedirectionParser
+from src.parser.token_types import TokenType
 
 # Alias functions for compatibility with the rest of the file
 parse_redirections = RedirectionParser.parse_redirections

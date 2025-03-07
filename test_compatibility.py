@@ -10,9 +10,9 @@ def test_old_lexer():
     """Test the original lexer implementation"""
     # Note: This function is now completely obsolete as we've removed all compatibility imports
     # We now import directly from the new modules
-    from src.parser.new.token_types import Token, TokenType
-    from src.parser.new.lexer import tokenize
-    from src.parser.new.redirection import RedirectionParser
+    from src.parser.token_types import Token, TokenType
+    from src.parser.lexer import tokenize
+    from src.parser.redirection import RedirectionParser
     
     # For compatibility with the test
     parse_redirections = RedirectionParser.parse_redirections
@@ -49,9 +49,9 @@ def test_old_lexer():
 
 def test_new_lexer_compatibility():
     """Test the new lexer API directly"""
-    from src.parser.new.token_types import Token, TokenType
-    from src.parser.new.lexer import tokenize
-    from src.parser.new.redirection import RedirectionParser
+    from src.parser.token_types import Token, TokenType
+    from src.parser.lexer import tokenize
+    from src.parser.redirection import RedirectionParser
     
     # Aliases for compatibility with original test
     parse_redirections = RedirectionParser.parse_redirections

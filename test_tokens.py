@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from src.parser.new.lexer import tokenize
+from src.parser.lexer import tokenize
 from src.parser.quotes import is_quoted, strip_quotes
 
 # Test a command with quoted arguments

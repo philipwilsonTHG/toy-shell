@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 
 import pytest
-from src.parser.new.token_types import Token, TokenType
-from src.parser.new.lexer import tokenize
-from src.parser.new.redirection import RedirectionParser
+from src.parser.token_types import Token, TokenType
+from src.parser.lexer import tokenize
+from src.parser.redirection import RedirectionParser
 
 # For compatibility with tests
 parse_redirections = RedirectionParser.parse_redirections

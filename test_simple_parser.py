@@ -3,9 +3,9 @@
 Simplified test script for the new parser.
 """
 
-from src.parser.new.token_types import Token, TokenType 
-from src.parser.new.lexer import tokenize
-from src.parser.new.parser.shell_parser import ShellParser
+from src.parser.token_types import Token, TokenType 
+from src.parser.lexer import tokenize
+from src.parser.parser.shell_parser import ShellParser
 
 # Initialize parser
 parser = ShellParser()

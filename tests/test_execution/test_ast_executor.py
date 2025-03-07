@@ -10,7 +10,7 @@ from src.parser.ast import (
     ForNode, CaseNode, ListNode, FunctionNode
 )
 from src.execution.ast_executor import ASTExecutor, Scope
-from src.parser.new.parser.shell_parser import ShellParser
+from src.parser.parser.shell_parser import ShellParser
 
 
 def test_scope_variables():
