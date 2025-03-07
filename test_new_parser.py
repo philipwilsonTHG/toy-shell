@@ -82,7 +82,8 @@ def test_parser():
     """Pytest compatible test function that tests various parser inputs."""
     parse_test_input("echo hello world")
     parse_test_input("for i in 1 2 3; do echo $i; done")
-    return True
+    # Don't return a value to avoid pytest warning
+    # The assertions are implicit in the parsing not raising errors
 
 # Test simple commands
 def test_simple_commands():
