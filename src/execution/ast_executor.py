@@ -182,7 +182,7 @@ class ASTExecutor(ASTVisitor):
             return self.handle_test_command(node.args)
         
         # Regular command execution using pipeline executor
-        from ..parser.new.token_types import Token, TokenType, create_word_token
+        from ..parser.token_types import Token, TokenType, create_word_token
         
         # Create tokens from command, expanding variables
         tokens = []
@@ -250,7 +250,7 @@ class ASTExecutor(ASTVisitor):
     def visit_pipeline(self, node: PipelineNode) -> int:
         """Execute a pipeline of commands"""
         # Convert back to tokens for pipeline executor
-        from ..parser.new.token_types import Token, TokenType, create_word_token
+        from ..parser.token_types import Token, TokenType, create_word_token
         
         tokens = []
         for i, cmd in enumerate(node.commands):
