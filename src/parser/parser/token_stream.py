@@ -201,3 +201,39 @@ class TokenStream:
             position = len(self.tokens)
             
         self.current = position
+        
+    def split_on_and_or(self) -> List[tuple]:
+        """
+        Split the token stream on '&&' and '||' operators.
+        
+        Returns a list of tuples: (segment_tokens, operator) where:
+        - segment_tokens is a list of tokens forming a command or pipeline
+        - operator is the AND/OR operator ('&&' or '||') following this segment, or None for the last segment
+        """
+        segments = []
+        current_tokens = []
+        
+        # Save initial position to restore later
+        start_position = self.save_position()
+        
+        while not self.is_at_end():
+            token = self.peek()
+            
+            if token.value in ['&&', '||']:
+                # Store current command segment and operator
+                operator = token.value
+                segments.append((current_tokens, operator))
+                current_tokens = []
+                self.consume()  # Consume the operator
+            else:
+                current_tokens.append(token)
+                self.consume()
+        
+        # Add the final segment if it's not empty
+        if current_tokens:
+            segments.append((current_tokens, None))
+        
+        # Restore the stream position
+        self.restore_position(start_position)
+        
+        return segments

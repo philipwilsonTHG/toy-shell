@@ -4,9 +4,9 @@ Main parser class that orchestrates parsing of shell scripts.
 """
 import os
 
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Tuple
 
-from ..ast import Node, ListNode
+from ..ast import Node, ListNode, AndOrNode
 from ..token_types import Token, TokenType
 from .token_stream import TokenStream
 from .parser_context import ParserContext
@@ -72,8 +72,55 @@ class ShellParser:
         stream = TokenStream(tokens)
         self.context = ParserContext()
         
-        # Parse program
+        # Parse program (our parse_program method now handles AND-OR lists)
         return self.parse_program(stream, self.context)
+        
+    def parse_and_or_list(self, stream: TokenStream, context: ParserContext) -> Optional[Node]:
+        """
+        Parse an AND-OR list (commands connected by && or ||).
+        
+        Args:
+            stream: The token stream to parse from
+            context: The parser context for state and error reporting
+            
+        Returns:
+            An AndOrNode representing the AND-OR list, or None if parsing failed
+        """
+        # Get the segments based on AND-OR operators
+        segments = stream.split_on_and_or()
+        
+        # Validate that we don't have empty segments or consecutive operators
+        for i, (segment_tokens, operator) in enumerate(segments):
+            if not segment_tokens:
+                # Cannot have empty command segments
+                if i == 0:
+                    context.report_error("Syntax error: unexpected operator at the start of command")
+                else:
+                    context.report_error("Syntax error: consecutive operators without commands")
+                return None
+                
+        # Process each segment to create command nodes
+        commands_with_operators = []
+        
+        for segment_tokens, operator in segments:
+            # Create a substream for this segment
+            segment_stream = TokenStream(segment_tokens)
+            
+            # Parse the segment as a simple command or pipeline (no recursive AND-OR parsing)
+            # We use the select_rule method to get the appropriate rule based on the segment
+            if not segment_stream.is_at_end():
+                rule = self.select_rule(segment_stream)
+                command_node = rule.parse(segment_stream, context)
+                
+                if command_node is None:
+                    context.report_error("Failed to parse command in AND-OR list")
+                    return None
+                    
+                # Add to our list of commands with their operators
+                commands_with_operators.append((command_node, operator))
+            
+        # Return the AND-OR node
+        return AndOrNode(commands_with_operators)
     
     def parse_line(self, line: str) -> Optional[Node]:
         """
@@ -134,6 +181,17 @@ class ShellParser:
         Returns:
             A node representing the program, or None if parsing failed
         """
+        # First check for AND-OR lists at the top level
+        tokens_with_andor = False
+        for i in range(len(stream.tokens)):
+            if i < len(stream.tokens) and stream.tokens[i].value in ['&&', '||']:
+                tokens_with_andor = True
+                break
+                
+        if tokens_with_andor:
+            return self.parse_and_or_list(stream, context)
+        
+        # If not an AND-OR list, proceed with regular parsing
         statements = []
         
         while not stream.is_at_end():

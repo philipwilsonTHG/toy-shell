@@ -34,6 +34,10 @@ class ASTVisitor(ABC):
     @abstractmethod
     def visit_function(self, node: 'FunctionNode') -> Any:
         pass
+        
+    @abstractmethod
+    def visit_and_or(self, node: 'AndOrNode') -> Any:
+        pass
 
 
 class Node(ABC):
@@ -175,3 +179,27 @@ class ListNode(Node):
     
     def __repr__(self) -> str:
         return f"ListNode(nodes={self.nodes!r})"
+
+
+class AndOrNode(Node):
+    """
+    Represents an AND-OR list of commands connected by && or || operators.
+    
+    In POSIX shells, AND-OR lists allow conditional execution based on success or failure:
+    - cmd1 && cmd2 - Execute cmd2 only if cmd1 succeeds (exit status 0)
+    - cmd1 || cmd2 - Execute cmd2 only if cmd1 fails (non-zero exit status)
+    """
+    
+    def __init__(self, commands_with_operators: List[tuple]):
+        """
+        Initialize with list of (command_node, operator) tuples where:
+        - command_node is any executable node (Command, Pipeline, etc.)
+        - operator is either '&&', '||', or None (for the last command)
+        """
+        self.commands_with_operators = commands_with_operators
+    
+    def accept(self, visitor: ASTVisitor) -> Any:
+        return visitor.visit_and_or(self)
+    
+    def __repr__(self) -> str:
+        return f"AndOrNode(commands_with_operators={self.commands_with_operators!r})"

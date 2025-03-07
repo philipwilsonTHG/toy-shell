@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Any, Tuple
 
 from ..parser.ast import (
     ASTVisitor, Node, CommandNode, PipelineNode, IfNode, WhileNode,
-    ForNode, CaseNode, FunctionNode, ListNode, CaseItem
+    ForNode, CaseNode, FunctionNode, ListNode, CaseItem, AndOrNode
 )
 from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
@@ -387,6 +387,49 @@ class ASTExecutor(ASTVisitor):
         """Define a function"""
         self.function_registry.register(node.name, node)
         return 0
+        
+    def visit_and_or(self, node: AndOrNode) -> int:
+        """
+        Execute an AND-OR list with proper short-circuit evaluation.
+        
+        For AND (&&) operations:
+            - If the left command succeeds (exit status 0), execute the right command
+            - If the left command fails (non-zero exit status), skip the right command
+            
+        For OR (||) operations:
+            - If the left command succeeds (exit status 0), skip the right command
+            - If the left command fails (non-zero exit status), execute the right command
+            
+        Returns the exit status of the last executed command.
+        """
+        result = 0
+        
+        # Debug output
+        if self.debug_mode:
+            print("[DEBUG] Executing AND-OR list:", file=sys.stderr)
+            for i, (cmd, op) in enumerate(node.commands_with_operators):
+                op_str = f" {op} " if op else ""
+                print(f"  {i}: {cmd}{op_str}", file=sys.stderr)
+        
+        # Execute commands with short-circuit evaluation
+        for command_node, operator in node.commands_with_operators:
+            # Execute the current command
+            result = self.execute(command_node)
+            self.last_status = result
+            
+            # Handle short-circuit logic based on the operator
+            if operator == '&&' and result != 0:
+                # AND operation: if the left command fails, short-circuit and skip the rest
+                if self.debug_mode:
+                    print(f"[DEBUG] Short-circuit AND: Command failed with status {result}", file=sys.stderr)
+                break
+            elif operator == '||' and result == 0:
+                # OR operation: if the left command succeeds, short-circuit and skip the rest
+                if self.debug_mode:
+                    print(f"[DEBUG] Short-circuit OR: Command succeeded with status {result}", file=sys.stderr)
+                break
+        
+        return result
     
     def expand_word(self, word: str) -> str:
         """Expand variables in a word"""
