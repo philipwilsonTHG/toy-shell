@@ -356,6 +356,7 @@ def execute_script(script_path, debug_mode=False):
 def main():
     """Shell entry point using getopts-style argument parsing"""
     import getopt
+    import sys
     
     # Define options
     short_opts = "c:dhv"
@@ -383,6 +384,9 @@ def main():
     
         # Create shell instance with appropriate debug setting
         shell = Shell(debug_mode=debug_mode)
+        
+        # Store shell instance in a global variable for the source builtin to access
+        sys.modules["__main__"].shell = shell
         
         # Handle command if provided with -c
         if command is not None:

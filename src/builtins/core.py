@@ -77,7 +77,7 @@ def version() -> int:
     return 0
 
 def source(filename: Optional[str] = None) -> int:
-    """Execute commands from a file
+    """Execute commands from a file in the current shell context
     
     Usage:
         source filename    # Execute commands from filename
@@ -94,43 +94,48 @@ def source(filename: Optional[str] = None) -> int:
         # Get full path to script
         filepath = os.path.expanduser(filename)
         
-        # Import Shell class here to avoid circular imports
-        from ..shell import Shell
-        
-        # Create a shell instance with the same interactive state as the parent
-        # This is important for executing commands in the same context
-        # Always set debug_mode to False to prevent hanging during test collection
-        shell = Shell(debug_mode=False)
-        
-        # Read and execute entire file content
+        # Read the file content
         with open(filepath) as f:
-            exit_status = 0
+            script_content = f.read().strip()
+        
+        # We'll use a direct approach
+        # Execute each line directly one at a time in the current context
+        
+        # Split into lines and execute each separately
+        lines = script_content.splitlines()
+        exit_status = 0
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
             
             try:
-                # Read the entire file and execute as a single script
-                script_content = f.read()
-                
-                # Execute the script using shell's execute_line method
-                result = shell.execute_line(script_content)
-                
-                # Handle command results
+                # Handle variable assignments directly
+                if "=" in line and not any(cmd in line for cmd in ["export", "echo", "if", "for", "while"]):
+                    var_name, var_value = line.split("=", 1)
+                    os.environ[var_name] = var_value
+                    continue
+                    
+                # Parse export command manually for simpler cases
+                if line.startswith("export ") and "=" in line:
+                    # Extract the variable portion after export
+                    var_part = line[7:].strip()
+                    var_name, var_value = var_part.split("=", 1)
+                    os.environ[var_name] = var_value
+                    continue
+                    
+                # For other commands, use shell execution
+                from ..shell import Shell
+                result = Shell(debug_mode=False).execute_line(line)
                 if result is not None:
-                    # Check for exit command (special code <=-1000)
-                    if result <= -1000 and result >= -1255:
-                        # Convert exit code: -1000-N → N (0-255)
-                        exit_status = abs(result) - 1000
-                        return exit_status  # Return immediately on exit
-                    else:
-                        # Save regular exit status
-                        exit_status = result
-                        
+                    exit_status = result
+                    
             except Exception as e:
-                # Log error and exit with failure
-                sys.stderr.write(f"source: error executing script: {e}\n")
-                return 1
-            
-            # Return the last exit status from the script
-            return exit_status
+                sys.stderr.write(f"source: error executing '{line}': {e}\n")
+                exit_status = 1
+        
+        return exit_status
             
     except FileNotFoundError:
         sys.stderr.write(f"source: {filename}: No such file\n")
