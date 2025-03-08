@@ -14,7 +14,8 @@ class Lexer:
         self.reset()
         
         # Recognized shell operators
-        self.operators = {'|', '>', '<', '&', ';', '[', ']', '(', ')', '{', '}'}
+        self.operators = {'|', '>', '<', '&', ';', '[', ']', '(', ')'}
+        # Note: { and } are handled specially for brace expansion
         
         # Multi-character operators
         self.multi_char_operators = {
@@ -25,8 +26,8 @@ class Lexer:
             '2>', '2>>'  # Stderr redirection
         }
         
-        # Operator detection pattern
-        self.operator_pattern = re.compile(r'[|><&;\[\](){}\\\'"$]')
+        # Operator detection pattern (removed { and } for brace expansion handling)
+        self.operator_pattern = re.compile(r'[|><&;\[\]()\\\'"$]')
     
     def reset(self):
         """Reset lexer state"""
@@ -85,6 +86,16 @@ class Lexer:
                 i = self.handle_stderr_redirection(line, i)
                 continue
             
+            # Handle brace expansion patterns
+            if char == '{' and not self.in_quotes():
+                i = self.handle_brace_expansion(line, i)
+                continue
+                
+            # Handle closing brace (if not part of a brace expansion pattern)
+            if char == '}' and not self.in_quotes():
+                i = self.handle_operator(line, i)
+                continue
+                
             # Handle operators
             if char in self.operators:
                 i = self.handle_operator(line, i)
@@ -388,6 +399,65 @@ class Lexer:
         self.tokens.append(create_operator_token(char))
         return i + 1
     
+    def handle_brace_expansion(self, line: str, i: int) -> int:
+        """
+        Handle brace expansion patterns like {a,b,c} or {1..5}
+        
+        This function attempts to capture the entire brace expansion pattern as a single token,
+        including nested braces.
+        """
+        # Start building the brace expansion pattern
+        start_index = i
+        brace_count = 1  # We've already seen one opening brace
+        
+        # Finish current token if any
+        if self.buffer:
+            self.tokens.append(create_word_token(''.join(self.buffer)))
+            self.buffer = []
+        
+        # Add the opening brace
+        self.buffer.append(line[i])
+        i += 1
+        
+        # Scan for the complete brace pattern
+        while i < len(line) and brace_count > 0:
+            char = line[i]
+            
+            # Handle escaped characters
+            if char == '\\' and i + 1 < len(line):
+                # Skip the backslash and include the next character literally
+                self.buffer.append(char)
+                i += 1
+                if i < len(line):
+                    self.buffer.append(line[i])
+                i += 1
+                continue
+                
+            # Count braces for nesting
+            if char == '{':
+                brace_count += 1
+            elif char == '}':
+                brace_count -= 1
+                
+            # Add the current character to the pattern
+            self.buffer.append(char)
+            i += 1
+            
+            # If we've closed all braces, we've found the complete pattern
+            if brace_count == 0:
+                # Create a token for the entire brace expansion pattern
+                token = create_word_token(''.join(self.buffer))
+                self.tokens.append(token)
+                self.buffer = []
+                return i
+        
+        # If we didn't complete the pattern, treat the opening brace as a regular character
+        # and continue processing from the next character
+        token = create_word_token(''.join(self.buffer))
+        self.tokens.append(token)
+        self.buffer = []
+        return i
+
     def finish_current_token(self, i: int) -> int:
         """Complete the current token and add it to the token list"""
         if self.buffer:
