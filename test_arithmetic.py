@@ -2,7 +2,7 @@
 
 import os
 import unittest
-from src.parser.expander import expand_arithmetic
+from src.parser.expander_facade import expand_arithmetic
 from src.parser.lexer import tokenize
 
 class TestArithmeticExpansion(unittest.TestCase):
@@ -90,7 +90,7 @@ class TestArithmeticExpansion(unittest.TestCase):
             
     def test_nested_arithmetic(self):
         """Test nested arithmetic expressions"""
-        from src.parser.expander import expand_all
+        from src.parser.expander_facade import expand_all
         
         # Test nested arithmetic using expand_all
         test_case = '$((1 + $((2 * 3))))'
@@ -106,7 +106,7 @@ class TestArithmeticExpansion(unittest.TestCase):
         
     def test_integration_with_expand_all(self):
         """Test that arithmetic expansion works within expand_all"""
-        from src.parser.expander import expand_all
+        from src.parser.expander_facade import expand_all
         
         # Directly test arithmetic expansion in expand_all
         self.assertEqual(expand_all("$((1 + 2))"), "3")

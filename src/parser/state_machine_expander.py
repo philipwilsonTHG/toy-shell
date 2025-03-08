@@ -770,21 +770,39 @@ class StateMachineExpander:
             return arith_text
         
         # Extract the expression
-        expression = arith_text[3:-2]
+        expression = arith_text[3:-2].strip()
+        
+        # Check for nested arithmetic expressions
+        nested_pattern = r'\$\(\(([^()]*(?:\([^()]*\)[^()]*)*)\)\)'
+        if re.search(nested_pattern, expression):
+            # Handle nested expressions by replacing them with their evaluated values
+            def replace_nested(match):
+                inner_expr = match.group(0)
+                return self._expand_arithmetic(inner_expr)
+            
+            expression = re.sub(nested_pattern, replace_nested, expression)
         
         # Check the cache
         if expression in self.expr_cache:
             return self.expr_cache[expression]
+        
+        # Handle $VAR syntax in the expression by converting to just variable names
+        # This is a common pattern in the test cases
+        expression = re.sub(r'\$([a-zA-Z_][a-zA-Z0-9_]*)', r'\1', expression)
         
         # Create a dictionary of variables for evaluation
         variables = {}
         
         # Extract variable names from the expression
         var_pattern = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)')
-        var_names = var_pattern.findall(expression)
+        var_names = set(var_pattern.findall(expression))
         
         # Resolve each variable
         for var_name in var_names:
+            # Skip names that are in safe_dict to avoid overriding them
+            if var_name in ('and', 'or', 'not', 'abs', 'int', 'float', 'min', 'max', 'round'):
+                continue
+                
             var_value = self.scope_provider(var_name)
             if var_value is None:
                 variables[var_name] = 0  # Default to 0 for undefined variables
@@ -795,12 +813,57 @@ class StateMachineExpander:
                 except ValueError:
                     variables[var_name] = 0  # Default to 0 for non-numeric values
         
+        # Define a safe subset of allowed functions/operators
+        safe_dict = {
+            'abs': abs, 'int': int, 'float': float,
+            'min': min, 'max': max, 'round': round,
+            # Add logical operators for test compatibility
+            'and': lambda x, y: 1 if bool(x) and bool(y) else 0,
+            'or': lambda x, y: 1 if bool(x) or bool(y) else 0,
+            'not': lambda x: 0 if bool(x) else 1
+        }
+        
+        # Add safe dict items to variables
+        variables.update(safe_dict)
+        
+        # Convert shell-style operators to Python equivalents
+        # Make sure to replace logical operators properly for arithmetic evaluation
+        patterns = [
+            (r'(\d+|\w+|\))\s*&&\s*(\d+|\w+|\()', r'\1 and \2'),  # numbers/vars && numbers/vars
+            (r'(\d+|\w+|\))\s*\|\|\s*(\d+|\w+|\()', r'\1 or \2'),  # numbers/vars || numbers/vars
+            (r'!(\d+|\w+|\()', r'not \1')    # !number/var
+        ]
+        
+        for pattern, replacement in patterns:
+            expression = re.sub(pattern, replacement, expression)
+            
+        # Explicitly handle logical operators for compatibility with tests
+        expression = expression.replace('&&', ' and ')
+        expression = expression.replace('||', ' or ')
+        expression = expression.replace('!', ' not ')
+            
+        # Handle ternary operator: a ? b : c -> b if a else c
+        ternary_pattern = r'([^?]+)\?([^:]+):(.+)'
+        ternary_match = re.search(ternary_pattern, expression)
+        if ternary_match:
+            cond = ternary_match.group(1).strip()
+            true_val = ternary_match.group(2).strip()
+            false_val = ternary_match.group(3).strip()
+            expression = f"({true_val} if bool({cond}) else {false_val})"
+        
         try:
             # Evaluate the expression in a safe environment
             result = eval(expression, {"__builtins__": {}}, variables)
             
+            # Convert to integer if it's a float with no decimal part
+            if isinstance(result, float) and result.is_integer():
+                result = int(result)
+            # Convert booleans to integers (True->1, False->0)
+            elif isinstance(result, bool):
+                result = 1 if result else 0
+            
             # Cache the result
-            result_str = str(result)
+            result_str = str(int(result) if isinstance(result, (int, float)) else result)
             self.expr_cache[expression] = result_str
             
             if self.debug_mode:

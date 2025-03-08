@@ -4,9 +4,13 @@ Adapter class for the state machine expander to maintain compatibility
 with the existing WordExpander interface.
 """
 
-from typing import Optional, Callable, Dict
+from typing import Optional, Callable, Dict, List
+import os
 
 from .state_machine_expander import StateMachineExpander
+
+# Import brace expansion from the dedicated module
+from .brace_expander import expand_braces as _original_expand_braces
 
 
 class StateMachineWordExpander:
@@ -94,3 +98,46 @@ class StateMachineWordExpander:
         """Clear the variable cache when variables change"""
         self.expander.clear_caches()
         self.var_cache.clear()
+    
+    @staticmethod
+    def expand_braces(text: str) -> List[str]:
+        """
+        Static method to maintain compatibility with the original expand_braces function.
+        
+        Args:
+            text: The text containing brace patterns to expand
+            
+        Returns:
+            A list of expanded strings
+        """
+        return _original_expand_braces(text)
+    
+    @staticmethod
+    def expand_variables(text: str) -> str:
+        """
+        Static method for compatibility with direct calls to expand_variables
+        
+        Args:
+            text: The text to expand variables in
+            
+        Returns:
+            The text with variables expanded
+        """
+        # Create a simple expander that uses environment variables
+        expander = StateMachineExpander(os.environ.get, False)
+        return expander.expand_unquoted(text)
+    
+    @staticmethod
+    def expand_all(text: str) -> str:
+        """
+        Static method for compatibility with direct calls to expand_all
+        
+        Args:
+            text: The text to expand
+            
+        Returns:
+            The fully expanded text
+        """
+        # Create a simple expander that uses environment variables
+        expander = StateMachineExpander(os.environ.get, False)
+        return expander.expand(text)

@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional
 
 from ..parser.token_types import Token, TokenType, create_word_token
 from ..parser.redirection import RedirectionParser
-from ..parser.expander import expand_all, expand_command_substitution
+from ..parser.expander_facade import expand_all, expand_command_substitution
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController
 from ..builtins import BUILTINS

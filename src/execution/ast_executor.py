@@ -13,7 +13,7 @@ from ..parser.ast import (
 )
 from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
-from ..parser.expander import expand_all, expand_braces
+from ..parser.expander_facade import expand_all, expand_braces
 from ..parser.token_types import Token, TokenType, create_word_token
 # Import both expanders to allow for fall back if needed
 from ..parser.state_machine_adapter import StateMachineWordExpander

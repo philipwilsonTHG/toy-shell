@@ -1,12 +1,20 @@
 import os
 import pytest
-from src.parser.expander import (
+import tempfile
+import shutil
+
+# Import the new expander facade for testing
+from src.parser.expander_facade import (
     expand_variables,
+    expand_all,
     expand_command_substitution,
     expand_tilde,
     expand_wildcards,
-    expand_all
+    expand_arithmetic
 )
+
+# We'll also need the state machine expander for direct testing
+from src.parser.state_machine_expander import StateMachineExpander
 
 @pytest.fixture
 def setup_env():

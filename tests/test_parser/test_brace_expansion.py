@@ -4,7 +4,7 @@ Tests for brace expansion functionality.
 """
 
 import pytest
-from src.parser.expander import expand_braces
+from src.parser.brace_expander import expand_braces
 
 
 class TestBraceExpansion:

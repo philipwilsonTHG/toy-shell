@@ -5,8 +5,11 @@ This module provides the parser for shell scripts, with a modern implementation
 using grammar rules and better error handling.
 """
 
-# Import expander & quotes modules which are still supported here
-from .expander import expand_variables, expand_command_substitution
+# Import from the new expander facade
+from .expander_facade import (
+    expand_variables, expand_all, expand_braces,
+    expand_command_substitution, expand_tilde, expand_wildcards, expand_arithmetic
+)
 from .quotes import handle_quotes, is_quoted, strip_quotes
 
 # Import the new parser implementation
@@ -34,7 +37,12 @@ __all__ = [
     'parse_redirections',
     'split_pipeline',
     'expand_variables',
+    'expand_all',
+    'expand_braces',
     'expand_command_substitution',
+    'expand_tilde',
+    'expand_wildcards',
+    'expand_arithmetic',
     'handle_quotes',
     'is_quoted',
     'strip_quotes',

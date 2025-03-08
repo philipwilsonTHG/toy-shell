@@ -6,7 +6,7 @@ import sys
 from typing import Optional, Callable, Dict, Any, List, Tuple, Match, Pattern, Set
 from functools import lru_cache
 
-from .expander import expand_braces
+from .brace_expander import expand_braces
 
 
 class WordExpander:

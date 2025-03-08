@@ -3,7 +3,6 @@
 
 import time
 import sys
-from src.parser.word_expander import WordExpander
 from src.parser.state_machine_adapter import StateMachineWordExpander
 
 # Simple performance test comparing both expanders
@@ -43,17 +42,9 @@ def run_test(expander_class, name):
     
     return elapsed
 
-# Run tests with both expanders
+# Run tests with the state machine expander
 print(f"Running {ITERATIONS} iterations of each expansion test...")
 
-# Test with original regex-based expander
-original_time = run_test(WordExpander, "Original Regex Expander")
-print(f"Original Regex Expander: {original_time:.4f}s")
-
-# Test with new state machine expander
+# Test with state machine expander
 sm_time = run_test(StateMachineWordExpander, "State Machine Expander")
 print(f"State Machine Expander: {sm_time:.4f}s")
-
-# Calculate improvement
-improvement = (original_time - sm_time) / original_time * 100
-print(f"\nPerformance improvement: {improvement:.2f}%")
