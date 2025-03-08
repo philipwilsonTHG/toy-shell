@@ -182,7 +182,12 @@ class ASTExecutor(ASTVisitor):
             
         # Handle builtin command 'test' or '['
         if node.command in ['test', '[']:
-            return self.handle_test_command(node.args)
+            try:
+                return self.handle_test_command(node.args)
+            except ExecutionError as e:
+                # Print error to stderr
+                print(f"Error: {e}", file=sys.stderr)
+                return 1
         
         # Regular command execution using pipeline executor
         # Process the command, arguments, and redirections to get tokens
@@ -488,7 +493,7 @@ class ASTExecutor(ASTVisitor):
         # Strip leading [ and trailing ] if present
         if args[0] == '[':
             if args[-1] != ']':
-                return 1  # Missing closing bracket
+                raise ExecutionError("Missing closing bracket in test command")
             args = args[1:-1]
         else:
             # Remove 'test' from the beginning
@@ -496,60 +501,51 @@ class ASTExecutor(ASTVisitor):
         
         if not args:
             return 1  # Empty test is false
-            
-        # Handle simple file tests
-        if len(args) == 2 and args[0] == '-e':
-            return 0 if os.path.exists(args[1]) else 1
         
-        if len(args) == 2 and args[0] == '-f':
-            return 0 if os.path.isfile(args[1]) else 1
+        # Define operation handlers using dictionaries
+        # File test operations (take one argument after the operator)
+        file_tests = {
+            '-e': os.path.exists,      # File exists
+            '-f': os.path.isfile,      # Is a regular file
+            '-d': os.path.isdir,       # Is a directory
+        }
+        
+        # String comparison operations (take two arguments around the operator)
+        string_tests = {
+            '=': lambda a, b: a == b,   # String equality
+            '!=': lambda a, b: a != b,  # String inequality
+        }
+        
+        # Numeric comparison operations (take two arguments around the operator)
+        def safe_numeric_compare(a: str, b: str, op: Callable[[int, int], bool]) -> bool:
+            """Safely compare two strings as integers, returning False on ValueError"""
+            try:
+                return op(int(a), int(b))
+            except ValueError:
+                return False
+                
+        numeric_tests = {
+            '-eq': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x == y),  # Equal
+            '-ne': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x != y),  # Not equal
+            '-lt': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x < y),   # Less than
+            '-le': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x <= y),  # Less than or equal
+            '-gt': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x > y),   # Greater than
+            '-ge': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x >= y),  # Greater than or equal
+        }
+        
+        # Handle file tests (format: -e file)
+        if len(args) == 2 and args[0] in file_tests:
+            return 0 if file_tests[args[0]](args[1]) else 1
             
-        if len(args) == 2 and args[0] == '-d':
-            return 0 if os.path.isdir(args[1]) else 1
-            
-        # Handle string comparison
-        if len(args) == 3 and args[1] == '=':
-            return 0 if args[0] == args[2] else 1
-            
-        if len(args) == 3 and args[1] == '!=':
-            return 0 if args[0] != args[2] else 1
-            
-        # Handle numeric comparison
-        if len(args) == 3 and args[1] == '-eq':
-            try:
-                return 0 if int(args[0]) == int(args[2]) else 1
-            except ValueError:
-                return 1
+        # Handle two-operand tests (format: arg1 OP arg2)
+        if len(args) == 3:
+            # String comparison
+            if args[1] in string_tests:
+                return 0 if string_tests[args[1]](args[0], args[2]) else 1
                 
-        if len(args) == 3 and args[1] == '-ne':
-            try:
-                return 0 if int(args[0]) != int(args[2]) else 1
-            except ValueError:
-                return 1
-                
-        if len(args) == 3 and args[1] == '-lt':
-            try:
-                return 0 if int(args[0]) < int(args[2]) else 1
-            except ValueError:
-                return 1
-                
-        if len(args) == 3 and args[1] == '-le':
-            try:
-                return 0 if int(args[0]) <= int(args[2]) else 1
-            except ValueError:
-                return 1
-                
-        if len(args) == 3 and args[1] == '-gt':
-            try:
-                return 0 if int(args[0]) > int(args[2]) else 1
-            except ValueError:
-                return 1
-                
-        if len(args) == 3 and args[1] == '-ge':
-            try:
-                return 0 if int(args[0]) >= int(args[2]) else 1
-            except ValueError:
-                return 1
-                
+            # Numeric comparison
+            if args[1] in numeric_tests:
+                return 0 if numeric_tests[args[1]](args[0], args[2]) else 1
+        
         # Default to false for unrecognized tests
         return 1
