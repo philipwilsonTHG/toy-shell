@@ -61,21 +61,32 @@ class Shell:
             
             # Special handling for commands separated by semicolons
             if ';' in line:
-                # Check if the line starts with a shell keyword that uses semicolons in its syntax
+                # Check if the line starts with a shell keyword or contains control structure keywords
                 # Skip semicolon splitting for control structures
                 shell_keywords = ['if', 'while', 'until', 'for', 'case']
-                line_starts_with_keyword = False
+                control_keywords = ['then', 'else', 'elif', 'fi', 'do', 'done', 'esac']
+                has_control_structure = False
                 
                 # Check if the line starts with a keyword
                 stripped_line = line.lstrip()
                 for keyword in shell_keywords:
                     if stripped_line.startswith(keyword + ' ') or stripped_line == keyword:
-                        line_starts_with_keyword = True
+                        has_control_structure = True
                         break
                 
+                # Also check for control structure keywords that might be in the middle
+                if not has_control_structure:
+                    for keyword in control_keywords:
+                        # Make sure we're looking for whole words with spaces or semicolons around them
+                        if f" {keyword} " in line or f"{keyword} " in line or f" {keyword};" in line:
+                            has_control_structure = True
+                            break
+                
                 # If it's a control structure, don't split on semicolons
-                if line_starts_with_keyword:
+                if has_control_structure:
                     # Let the parser handle the entire statement
+                    if self.debug_mode:
+                        print(f"[DEBUG] Detected control structure, not splitting on semicolons", file=sys.stderr)
                     pass
                 else:
                     # Simple semicolon handling without accounting for quotes
