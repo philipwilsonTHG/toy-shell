@@ -95,13 +95,6 @@ def test_history_invalid_number(setup_history, capsys):
     assert "invalid option" in captured.err.lower()
 
 
-def test_history_persistence(temp_home):
-    """Test history file persistence"""
-    # Skip this test since it involves readline file operations
-    # which are problematic in a test environment
-    pytest.skip("Skipping history persistence test due to readline limitations")
-
-
 def test_history_invalid_command(setup_history, capsys):
     """Test history with invalid command"""
     history("-z")  # Invalid option

@@ -92,22 +92,6 @@ def test_for_loop():
     assert node.words == ["1", "2", "3"]
     assert isinstance(node.body, CommandNode)
 
-def test_case_statement():
-    # Using the token-based API directly for case parsing
-    from src.parser.lexer import tokenize
-    from src.parser.parser.rules import CaseStatementRule
-    from src.parser.parser.token_stream import TokenStream
-    from src.parser.parser.parser_context import ParserContext
-    
-    # Skip this test for now as the case parser is complex and needs specific setup
-    # that direct rule application doesn't provide
-    pytest.skip("Case statement parsing needs enhanced testing approach")
-
-def test_multi_line_if_statement(monkeypatch):
-    # Skip this test for now as multi-line parsing works differently in the new parser
-    # and would require significant changes to test
-    pytest.skip("Multi-line if statement parsing needs enhanced testing approach")
-
 def test_complex_script():
     parser = ShellParser()
     # Use a simpler script for now until we fix multi-line parsing
