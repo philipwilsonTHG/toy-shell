@@ -407,16 +407,30 @@ class ASTExecutor(ASTVisitor):
         # Expand the word
         word = self.word_expander.expand(node.word)
         
+        if self.debug_mode:
+            print(f"[DEBUG] Case statement with word: '{word}'", file=sys.stderr)
+        
         # Check each pattern
         for item in node.items:
             pattern = self.word_expander.expand(item.pattern)
             
+            if self.debug_mode:
+                print(f"[DEBUG] Checking case pattern: '{pattern}'", file=sys.stderr)
+            
             # Match pattern against word
             if self.pattern_match(word, pattern):
+                if self.debug_mode:
+                    print(f"[DEBUG] Pattern '{pattern}' matched word '{word}'", file=sys.stderr)
+                
                 # Execute matching action
                 result = self.execute(item.action)
                 self.last_status = result
                 return result
+            elif self.debug_mode:
+                print(f"[DEBUG] Pattern '{pattern}' did not match word '{word}'", file=sys.stderr)
+        
+        if self.debug_mode:
+            print(f"[DEBUG] No patterns matched word '{word}' in case statement", file=sys.stderr)
         
         # No patterns matched
         return 0
@@ -472,11 +486,20 @@ class ASTExecutor(ASTVisitor):
     # The expand_word method has been moved to WordExpander class
     
     def pattern_match(self, word: str, pattern: str) -> bool:
-        """Match a word against a shell pattern"""
+        """Match a word against a shell pattern
+        
+        Handles multiple patterns separated by | as in 'val1|val2|val3)' case items.
+        """
         # Handle special case of *) pattern
         if pattern == '*':
             return True
-            
+        
+        # Handle multiple patterns separated by |
+        if '|' in pattern:
+            patterns = [p.strip() for p in pattern.split('|')]
+            return any(self.pattern_match(word, p) for p in patterns)
+        
+        # Use fnmatch for wildcard patterns
         return fnmatch.fnmatch(word, pattern)
     
     def handle_test_command(self, args: List[str]) -> int:
