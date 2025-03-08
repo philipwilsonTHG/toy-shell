@@ -18,6 +18,8 @@
 - Document all public functions, classes, and methods with docstrings
 - Use f-strings for string formatting
 - Avoid globals; use the SHELL context object for state
+- Always fix bugs using a new git branch and merge with main after all tests pass
+- Increment version number using git tags
 
 ## Error Handling
 - Use specific exception types where possible
