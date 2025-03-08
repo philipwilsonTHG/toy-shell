@@ -185,11 +185,31 @@ class ASTExecutor(ASTVisitor):
             return self.handle_test_command(node.args)
         
         # Regular command execution using pipeline executor
-        # Create tokens from command, expanding variables
+        # Process the command, arguments, and redirections to get tokens
+        tokens = self._process_command_to_tokens(node.command, node.args, node.redirections)
+            
+        # Execute the command
+        result = self.pipeline_executor.execute_pipeline(tokens, node.background)
+        self.last_status = result if result is not None else 0
+        return self.last_status
+        
+    def _process_command_to_tokens(self, command: str, args: List[str], 
+                                redirections: List[Tuple[str, str]]) -> List[Token]:
+        """
+        Convert a command, its args, and redirections to tokens with expansion
+        
+        Args:
+            command: The command to execute
+            args: List of command arguments (first item is the command itself)
+            redirections: List of redirection tuples (operator, target)
+            
+        Returns:
+            List of tokens ready for pipeline execution
+        """
         tokens = []
         
-        # Handle escaped dollar signs first (before expansion)
-        fixed_command = self._handle_escaped_dollars(node.command)
+        # Handle command expansion
+        fixed_command = self._handle_escaped_dollars(command)
         expanded_command = self.expand_word(fixed_command)
         
         # Handle brace expansion in the command itself
@@ -202,7 +222,8 @@ class ASTExecutor(ASTVisitor):
         else:
             tokens.append(create_word_token(expanded_command))
         
-        for arg in node.args[1:]:
+        # Handle arguments (skip the first one which is the command itself)
+        for arg in args[1:]:
             # Check if we need to preserve spaces for quotes
             is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
             
@@ -227,9 +248,9 @@ class ASTExecutor(ASTVisitor):
                 # Create a special token attribute to mark quoted arguments
                 token = create_word_token(expanded_arg, quoted=is_quoted_arg)
                 tokens.append(token)
-            
-        # Add redirections with variable expansion
-        for redir_op, redir_target in node.redirections:
+        
+        # Handle redirections
+        for redir_op, redir_target in redirections:
             # Special handling for 2>&1 format
             if redir_op == '2>&1':
                 # This is already in the format we want
@@ -244,11 +265,8 @@ class ASTExecutor(ASTVisitor):
                 fixed_target = self._handle_escaped_dollars(redir_target)
                 expanded_target = self.expand_word(fixed_target)
                 tokens.append(create_word_token(expanded_target))
-            
-        # Execute the command
-        result = self.pipeline_executor.execute_pipeline(tokens, node.background)
-        self.last_status = result if result is not None else 0
-        return self.last_status
+                
+        return tokens
         
     def _handle_escaped_dollars(self, text: str) -> str:
         """
@@ -269,54 +287,12 @@ class ASTExecutor(ASTVisitor):
         """Execute a pipeline of commands"""
         # Convert back to tokens for pipeline executor
         tokens = []
+        
+        # Process each command in the pipeline
         for i, cmd in enumerate(node.commands):
-            # Add command and args with variable expansion
-            fixed_command = self._handle_escaped_dollars(cmd.command)
-            expanded_command = self.expand_word(fixed_command)
-            
-            # Handle brace expansion in the command itself
-            if ' ' in expanded_command:
-                # Split into multiple tokens - first one is the command, rest are args
-                words = expanded_command.split()
-                tokens.append(create_word_token(words[0]))
-                for word in words[1:]:
-                    tokens.append(create_word_token(word))
-            else:
-                tokens.append(create_word_token(expanded_command))
-            
-            for arg in cmd.args[1:]:
-                fixed_arg = self._handle_escaped_dollars(arg)
-                expanded_arg = self.expand_word(fixed_arg)
-                
-                # Check if this is a quoted argument that should have spaces preserved
-                is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
-                
-                # Handle brace expansion results - may contain spaces that need word splitting
-                if ' ' in expanded_arg and not is_quoted_arg:
-                    # Split the expanded result into multiple tokens
-                    for word in expanded_arg.split():
-                        if self.debug_mode:
-                            print(f"[DEBUG] Word splitting in pipeline: '{expanded_arg}' -> '{word}'", file=sys.stderr)
-                        tokens.append(create_word_token(word, quoted=False))
-                else:
-                    tokens.append(create_word_token(expanded_arg, quoted=is_quoted_arg))
-            
-            # Add redirections with variable expansion
-            for redir_op, redir_target in cmd.redirections:
-                # Special handling for 2>&1 format
-                if redir_op == '2>&1':
-                    # This is already in the format we want
-                    tokens.append(Token('2>', TokenType.OPERATOR))
-                    tokens.append(Token('&1', TokenType.OPERATOR))
-                elif redir_op == '2>' and redir_target == '&1':
-                    # Also handle this format explicitly
-                    tokens.append(Token('2>', TokenType.OPERATOR))
-                    tokens.append(Token('&1', TokenType.OPERATOR))
-                else:
-                    tokens.append(Token(redir_op, TokenType.OPERATOR))
-                    fixed_target = self._handle_escaped_dollars(redir_target)
-                    expanded_target = self.expand_word(fixed_target)
-                    tokens.append(create_word_token(expanded_target))
+            # Process each command to tokens
+            cmd_tokens = self._process_command_to_tokens(cmd.command, cmd.args, cmd.redirections)
+            tokens.extend(cmd_tokens)
             
             # Add pipe between commands (except after the last command)
             if i < len(node.commands) - 1:
