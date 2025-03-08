@@ -2,6 +2,7 @@
 
 from typing import List, Tuple, Dict, Optional, Set
 import re
+import sys
 
 from .token_types import Token, TokenType, KEYWORDS, create_word_token, create_operator_token, create_substitution_token, create_arithmetic_token
 from .redirection import RedirectionParser, RedirectionType
@@ -404,62 +405,54 @@ class Lexer:
         Handle brace expansion patterns like {a,b,c} or {1..5}
         
         This function attempts to capture the entire brace expansion pattern as a single token,
-        including nested braces.
+        including nested braces and multiple patterns (e.g., file{1..3}.{txt,log}).
         """
-        # Check if this brace is part of a prefix
-        prefix = ''.join(self.buffer)
-        has_prefix = bool(self.buffer)  # True if buffer is not empty
-        
-        # Start building the brace expansion pattern
+        # We'll collect the entire token, which may include multiple brace patterns
         start_index = i
-        brace_count = 1  # We've already seen one opening brace
         
-        # Keep the prefix in the buffer
-        if not has_prefix:
-            # If no prefix, start with empty buffer
-            self.buffer = []
+        # Process the token until we hit a terminating character (space, operator, etc.)
+        # Keep track of brace nesting level
+        brace_level = 0
         
-        # Add the opening brace
-        self.buffer.append(line[i])
-        i += 1
-        
-        # Scan for the complete brace pattern
-        while i < len(line) and brace_count > 0:
+        # Process until we hit a token-terminating character
+        while i < len(line):
             char = line[i]
             
+            # Check for token terminators (space, operators, etc.)
+            if char.isspace() or char in ';|&<>':
+                break
+                
             # Handle escaped characters
             if char == '\\' and i + 1 < len(line):
-                # Skip the backslash and include the next character literally
+                # Add both the escape and the next character
                 self.buffer.append(char)
                 i += 1
                 if i < len(line):
                     self.buffer.append(line[i])
                 i += 1
                 continue
-                
-            # Count braces for nesting
+            
+            # Track brace nesting
             if char == '{':
-                brace_count += 1
+                brace_level += 1
             elif char == '}':
-                brace_count -= 1
-                
-            # Add the current character to the pattern
+                brace_level -= 1
+            
+            # Add the character to our buffer
             self.buffer.append(char)
             i += 1
-            
-            # If we've closed all braces, we've found the complete pattern
-            if brace_count == 0:
-                # Create a token for the entire brace expansion pattern
-                token = create_word_token(''.join(self.buffer))
-                self.tokens.append(token)
-                self.buffer = []
-                return i
         
-        # If we didn't complete the pattern, treat the opening brace as a regular character
-        # and continue processing from the next character
-        token = create_word_token(''.join(self.buffer))
-        self.tokens.append(token)
-        self.buffer = []
+        # If we have unbalanced braces, that's a syntax error, but we'll still
+        # tokenize what we have and let the parser handle the error
+        if brace_level != 0:
+            print(f"Warning: Unbalanced braces in pattern: {''.join(self.buffer)}", file=sys.stderr)
+            
+        # Create a token for the entire pattern
+        if self.buffer:
+            token = create_word_token(''.join(self.buffer))
+            self.tokens.append(token)
+            self.buffer = []
+            
         return i
 
     def finish_current_token(self, i: int) -> int:

@@ -89,6 +89,16 @@ class TestBraceExpansion:
         self.tester.assert_outputs_match("""
         echo {a,b}_{1,2}
         """)
+        
+    def test_combined_patterns(self):
+        """Test combined patterns with ranges and lists."""
+        self.tester.assert_outputs_match("""
+        echo file{1..3}.{txt,log}
+        """)
+        
+        self.tester.assert_outputs_match("""
+        echo {1..3}{a..c}
+        """)
     
     def test_empty_elements(self):
         """Test brace expansion with empty elements."""

@@ -45,6 +45,18 @@ class TestBraceExpansion:
     def test_multiple_brace_patterns(self):
         """Test multiple brace patterns in one string."""
         assert expand_braces("{a,b}_{1,2}") == ["a_1", "a_2", "b_1", "b_2"]
+        
+    def test_combined_patterns(self):
+        """Test combined patterns with ranges and lists."""
+        assert expand_braces("file{1..3}.{txt,log}") == [
+            "file1.txt", "file1.log", 
+            "file2.txt", "file2.log", 
+            "file3.txt", "file3.log"
+        ]
+        assert expand_braces("img{1..2}.{png,jpg}") == [
+            "img1.png", "img1.jpg", 
+            "img2.png", "img2.jpg"
+        ]
     
     def test_no_expansion_in_quotes(self):
         """Test that braces are not expanded in quotes."""
