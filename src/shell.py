@@ -61,42 +61,59 @@ class Shell:
             
             # Special handling for commands separated by semicolons
             if ';' in line:
-                # Simple semicolon handling without accounting for quotes
-                from .parser.quotes import handle_quotes
+                # Check if the line starts with a shell keyword that uses semicolons in its syntax
+                # Skip semicolon splitting for control structures
+                shell_keywords = ['if', 'while', 'until', 'for', 'case']
+                line_starts_with_keyword = False
                 
-                # Preserve quotes when splitting on semicolons
-                commands = []
-                current_cmd = []
-                in_single_quote = False
-                in_double_quote = False
+                # Check if the line starts with a keyword
+                stripped_line = line.lstrip()
+                for keyword in shell_keywords:
+                    if stripped_line.startswith(keyword + ' ') or stripped_line == keyword:
+                        line_starts_with_keyword = True
+                        break
                 
-                for char in line:
-                    if char == "'" and not in_double_quote:
-                        in_single_quote = not in_single_quote
-                        current_cmd.append(char)
-                    elif char == '"' and not in_single_quote:
-                        in_double_quote = not in_double_quote
-                        current_cmd.append(char)
-                    elif char == ';' and not (in_single_quote or in_double_quote):
-                        if current_cmd:
-                            commands.append(''.join(current_cmd).strip())
-                            current_cmd = []
-                    else:
-                        current_cmd.append(char)
-                
-                # Add final command if any
-                if current_cmd:
-                    commands.append(''.join(current_cmd).strip())
-                
-                # Execute each command in sequence
-                last_status = 0
-                for cmd in commands:
-                    if cmd:  # Skip empty commands
-                        result = self.execute_line(cmd)
-                        if result is not None:
-                            last_status = result
-                
-                return last_status
+                # If it's a control structure, don't split on semicolons
+                if line_starts_with_keyword:
+                    # Let the parser handle the entire statement
+                    pass
+                else:
+                    # Simple semicolon handling without accounting for quotes
+                    from .parser.quotes import handle_quotes
+                    
+                    # Preserve quotes when splitting on semicolons
+                    commands = []
+                    current_cmd = []
+                    in_single_quote = False
+                    in_double_quote = False
+                    
+                    for char in line:
+                        if char == "'" and not in_double_quote:
+                            in_single_quote = not in_single_quote
+                            current_cmd.append(char)
+                        elif char == '"' and not in_single_quote:
+                            in_double_quote = not in_double_quote
+                            current_cmd.append(char)
+                        elif char == ';' and not (in_single_quote or in_double_quote):
+                            if current_cmd:
+                                commands.append(''.join(current_cmd).strip())
+                                current_cmd = []
+                        else:
+                            current_cmd.append(char)
+                    
+                    # Add final command if any
+                    if current_cmd:
+                        commands.append(''.join(current_cmd).strip())
+                    
+                    # Execute each command in sequence
+                    last_status = 0
+                    for cmd in commands:
+                        if cmd:  # Skip empty commands
+                            result = self.execute_line(cmd)
+                            if result is not None:
+                                last_status = result
+                    
+                    return last_status
                 
             # Handle $? special variable expansion
             if "$?" in line:
