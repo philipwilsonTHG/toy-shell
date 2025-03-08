@@ -188,7 +188,7 @@ def test_execute_case_statement():
     # Create case node
     node = CaseNode("apple", items)
     
-    with patch.object(executor, 'expand_word', return_value="apple"), \
+    with patch.object(executor.word_expander, 'expand', return_value="apple"), \
          patch.object(executor, 'pattern_match', return_value=True), \
          patch.object(executor, 'execute', return_value=0) as mock_exec:
         

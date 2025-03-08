@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
-from typing import List, Dict, Optional, Any, Callable, Union
+import sys
+from typing import List, Dict, Optional, Any, Callable, Union, TextIO
 from abc import ABC, abstractmethod
 from .token_types import Token
 
@@ -47,6 +48,19 @@ class Node(ABC):
     def accept(self, visitor: ASTVisitor) -> Any:
         """Accept a visitor to traverse this node"""
         pass
+        
+    @abstractmethod
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        pass
+
+def print_ast_debug(node: Optional[Node], indent: int = 0, file: TextIO = sys.stderr) -> None:
+    """Helper function to print an AST node with proper handling for None"""
+    if node is None:
+        prefix = "  " * indent
+        print(f"{prefix}None", file=file)
+    else:
+        node.print_debug(indent, file)
 
 
 class CommandNode(Node):
@@ -62,6 +76,11 @@ class CommandNode(Node):
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_command(self)
     
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+    
     def __repr__(self) -> str:
         return f"CommandNode(command={self.command!r}, args={self.args!r}, background={self.background})"
 
@@ -75,6 +94,14 @@ class PipelineNode(Node):
     
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_pipeline(self)
+    
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        for i, cmd in enumerate(self.commands):
+            print(f"{prefix}  Command {i+1}:", file=file)
+            print_ast_debug(cmd, indent + 2, file)
     
     def __repr__(self) -> str:
         return f"PipelineNode(commands={self.commands!r}, background={self.background})"
@@ -91,6 +118,18 @@ class IfNode(Node):
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_if(self)
     
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        print(f"{prefix}  Condition:", file=file)
+        print_ast_debug(self.condition, indent + 2, file)
+        print(f"{prefix}  Then branch:", file=file)
+        print_ast_debug(self.then_branch, indent + 2, file)
+        if self.else_branch:
+            print(f"{prefix}  Else branch:", file=file)
+            print_ast_debug(self.else_branch, indent + 2, file)
+    
     def __repr__(self) -> str:
         return f"IfNode(condition={self.condition!r}, then={self.then_branch!r}, else={self.else_branch!r})"
 
@@ -105,6 +144,15 @@ class WhileNode(Node):
     
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_while(self)
+    
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        print(f"{prefix}  Condition:", file=file)
+        print_ast_debug(self.condition, indent + 2, file)
+        print(f"{prefix}  Body:", file=file)
+        print_ast_debug(self.body, indent + 2, file)
     
     def __repr__(self) -> str:
         loop_type = "until" if self.until else "while"
@@ -122,6 +170,15 @@ class ForNode(Node):
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_for(self)
     
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        print(f"{prefix}  Variable: {self.variable}", file=file)
+        print(f"{prefix}  Words: {self.words}", file=file)
+        print(f"{prefix}  Body:", file=file)
+        print_ast_debug(self.body, indent + 2, file)
+    
     def __repr__(self) -> str:
         return f"ForNode(variable={self.variable!r}, words={self.words!r}, body={self.body!r})"
 
@@ -132,6 +189,12 @@ class CaseItem:
     def __init__(self, pattern: str, action: Node):
         self.pattern = pattern
         self.action = action
+    
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the item with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        print_ast_debug(self.action, indent + 1, file)
     
     def __repr__(self) -> str:
         return f"CaseItem(pattern={self.pattern!r}, action={self.action!r})"
@@ -147,6 +210,15 @@ class CaseNode(Node):
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_case(self)
     
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        print(f"{prefix}  Word: {self.word}", file=file)
+        for i, item in enumerate(self.items):
+            print(f"{prefix}  Pattern {i+1} ({item.pattern}):", file=file)
+            print_ast_debug(item.action, indent + 2, file)
+    
     def __repr__(self) -> str:
         return f"CaseNode(word={self.word!r}, items={self.items!r})"
 
@@ -160,6 +232,13 @@ class FunctionNode(Node):
     
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_function(self)
+    
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        print(f"{prefix}  Body:", file=file)
+        print_ast_debug(self.body, indent + 2, file)
     
     def __repr__(self) -> str:
         return f"FunctionNode(name={self.name!r}, body={self.body!r})"
@@ -176,6 +255,14 @@ class ListNode(Node):
         for node in self.nodes:
             results.append(node.accept(visitor))
         return results
+    
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        for i, node in enumerate(self.nodes):
+            print(f"{prefix}  Node {i+1}:", file=file)
+            print_ast_debug(node, indent + 2, file)
     
     def __repr__(self) -> str:
         return f"ListNode(nodes={self.nodes!r})"
@@ -200,6 +287,15 @@ class AndOrNode(Node):
     
     def accept(self, visitor: ASTVisitor) -> Any:
         return visitor.visit_and_or(self)
+    
+    def print_debug(self, indent: int = 0, file: TextIO = sys.stderr) -> None:
+        """Print a debug representation of the node with proper indentation"""
+        prefix = "  " * indent
+        print(f"{prefix}{self!r}", file=file)
+        for i, (cmd, op) in enumerate(self.commands_with_operators):
+            op_str = f" {op} " if op else " (end)"
+            print(f"{prefix}  Command {i+1}{op_str}:", file=file)
+            print_ast_debug(cmd, indent + 2, file)
     
     def __repr__(self) -> str:
         return f"AndOrNode(commands_with_operators={self.commands_with_operators!r})"

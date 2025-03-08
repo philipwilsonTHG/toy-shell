@@ -109,44 +109,8 @@ class ASTExecutor(ASTVisitor):
     
     def _print_ast(self, node: Node, indent: int = 0):
         """Print an AST node with indentation for debugging"""
-        prefix = "  " * indent
-        if node is None:
-            print(f"{prefix}None", file=sys.stderr)
-            return
-            
-        # Print node representation
-        node_str = repr(node)
-        print(f"{prefix}{node_str}", file=sys.stderr)
-        
-        # Recursively print child nodes
-        if isinstance(node, ListNode):
-            for child in node.nodes:
-                self._print_ast(child, indent + 1)
-        elif isinstance(node, IfNode):
-            print(f"{prefix}  Condition:", file=sys.stderr)
-            self._print_ast(node.condition, indent + 2)
-            print(f"{prefix}  Then branch:", file=sys.stderr)
-            self._print_ast(node.then_branch, indent + 2)
-            if node.else_branch:
-                print(f"{prefix}  Else branch:", file=sys.stderr)
-                self._print_ast(node.else_branch, indent + 2)
-        elif isinstance(node, WhileNode):
-            print(f"{prefix}  Condition:", file=sys.stderr)
-            self._print_ast(node.condition, indent + 2)
-            print(f"{prefix}  Body:", file=sys.stderr)
-            self._print_ast(node.body, indent + 2)
-        elif isinstance(node, ForNode):
-            print(f"{prefix}  Variable: {node.variable}", file=sys.stderr)
-            print(f"{prefix}  Words: {node.words}", file=sys.stderr)
-            print(f"{prefix}  Body:", file=sys.stderr)
-            self._print_ast(node.body, indent + 2)
-        elif isinstance(node, CaseNode):
-            for i, item in enumerate(node.items):
-                print(f"{prefix}  Pattern {i+1} ({item.pattern}):", file=sys.stderr)
-                self._print_ast(item.action, indent + 2)
-        elif isinstance(node, FunctionNode):
-            print(f"{prefix}  Body:", file=sys.stderr)
-            self._print_ast(node.body, indent + 2)
+        from ..parser.ast import print_ast_debug
+        print_ast_debug(node, indent, file=sys.stderr)
     
     def visit_command(self, node: CommandNode) -> int:
         """Execute a simple command"""
