@@ -406,13 +406,17 @@ class Lexer:
         This function attempts to capture the entire brace expansion pattern as a single token,
         including nested braces.
         """
+        # Check if this brace is part of a prefix
+        prefix = ''.join(self.buffer)
+        has_prefix = bool(self.buffer)  # True if buffer is not empty
+        
         # Start building the brace expansion pattern
         start_index = i
         brace_count = 1  # We've already seen one opening brace
         
-        # Finish current token if any
-        if self.buffer:
-            self.tokens.append(create_word_token(''.join(self.buffer)))
+        # Keep the prefix in the buffer
+        if not has_prefix:
+            # If no prefix, start with empty buffer
             self.buffer = []
         
         # Add the opening brace
