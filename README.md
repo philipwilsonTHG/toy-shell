@@ -151,7 +151,7 @@ debug=false
 ## Implementation Notes
 
 ### Parser Evolution
-The shell has undergone a significant parser upgrade to improve reliability and expand feature support:
+The shell has undergone significant upgrades to improve reliability and expand feature support:
 
 1. **Legacy Parser**: Original implementation using recursive descent parsing
 2. **New Parser**: Modern implementation with:
@@ -160,8 +160,13 @@ The shell has undergone a significant parser upgrade to improve reliability and 
    - Improved token management
    - Proper support for control structures
    - Cleaner separation of concerns
-
-The new parser provides better maintainability and extensibility, allowing for easier addition of new shell features.
+3. **State Machine Expander**: Optimized variable expansion using a state machine approach:
+   - Single-pass character-by-character processing
+   - More efficient handling of quotes, variables, and arithmetic expressions
+   - Built-in caching for better performance
+   - Robust handling of nested constructs
+   
+The new parser and state machine expander provide better maintainability, performance, and extensibility, allowing for easier addition of new shell features.
 
 ## Project Structure
 
@@ -189,15 +194,17 @@ src/
 │   ├── expander.py     # Variable/command expansion
 │   ├── parser.py       # Main parser (legacy)
 │   ├── quotes.py       # Quote handling
-│   └── new/            # New parser implementation
-│       ├── token_types.py  # Token types and definitions
-│       ├── lexer.py        # Lexical analysis
-│       ├── redirection.py  # Redirection handling
-│       └── parser/         # Grammar-based parser
-│           ├── grammar_rule.py   # Base grammar rule class
-│           ├── shell_parser.py   # Main parser implementation
-│           ├── token_stream.py   # Token stream management
-│           └── rules/           # Grammar rules for different constructs
+│   ├── word_expander.py     # Regex-based variable expansion
+│   ├── state_machine_expander.py  # State machine-based expansion
+│   ├── state_machine_adapter.py   # Adapter for compatibility
+│   ├── token_types.py      # Token types and definitions
+│   ├── lexer.py            # Lexical analysis
+│   ├── redirection.py      # Redirection handling
+│   └── parser/             # Grammar-based parser
+│       ├── grammar_rule.py   # Base grammar rule class
+│       ├── shell_parser.py   # Main parser implementation
+│       ├── token_stream.py   # Token stream management
+│       └── rules/            # Grammar rules for different constructs
 ├── shell.py            # Main shell implementation
 └── utils/              # Utility functions
     ├── __init__.py
