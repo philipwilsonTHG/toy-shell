@@ -102,13 +102,6 @@ class Shell:
             if "$?" in line:
                 line = line.replace("$?", str(self.last_exit_status))
                 
-            # Handle version command directly
-            if line == "version":
-                from . import __version__
-                print(f"Python Shell version {__version__}")
-                print(f"Python {sys.version}")
-                return 0
-            
             # Handle history execution with ! prefix
             if line.startswith('!'):
                 if len(line) > 1:
@@ -285,55 +278,114 @@ class Shell:
         return exit_status
 
 
+def print_help():
+    """Print usage information and exit"""
+    print("Usage: psh [OPTIONS] [SCRIPT_FILE]")
+    print("\nOptions:")
+    print("  -c COMMAND    Execute the given command")
+    print("  -d, --debug   Enable debug mode (prints AST before execution)")
+    print("  -h, --help    Show this help message and exit")
+    print("  -v, --version Display version information and exit")
+    print("\nExamples:")
+    print("  psh script.sh                           Run script")
+    print("  psh -d script.sh                        Run script with debugging")
+    print("  psh -c 'echo hello'                     Run a single command")
+    print("  psh -c 'for i in 1 2 3; do echo $i; done'   Run a for loop")
+    return 0
+
+def print_version():
+    """Print version information and exit"""
+    from .builtins.core import version
+    version()
+    return 0
+
+def execute_script(script_path, debug_mode=False):
+    """Execute a shell script file"""
+    try:
+        with open(script_path) as f:
+            # Read entire script
+            script_content = f.read()
+            
+            # Create a special script execution shell
+            script_shell = Shell(debug_mode=debug_mode)
+            
+            # Skip shebang line if present
+            lines = script_content.split('\n')
+            
+            if lines and lines[0].startswith('#!'):
+                if debug_mode:
+                    print(f"[DEBUG] Skipping shebang line: {lines[0]}", file=sys.stderr)
+                start_line = 1
+            else:
+                start_line = 0
+            
+            # Process script line by line, skipping comments and empty lines
+            exit_status = 0
+            for i in range(start_line, len(lines)):
+                line = lines[i].strip()
+                if not line or line.startswith('#'):
+                    continue
+                    
+                if debug_mode:
+                    print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
+                    
+                try:
+                    result = script_shell.execute_line(line)
+                    if result is not None:
+                        exit_status = result
+                except Exception as e:
+                    if debug_mode:
+                        print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
+                    exit_status = 1
+                    break
+            
+            return exit_status
+    except FileNotFoundError:
+        print(f"Error: Script file not found: {script_path}", file=sys.stderr)
+        return 1
+    except PermissionError:
+        print(f"Error: Permission denied when reading: {script_path}", file=sys.stderr)
+        return 1
+    except Exception as e:
+        print(f"Error running script {script_path}: {e}", file=sys.stderr)
+        if debug_mode:
+            import traceback
+            traceback.print_exc()
+        return 1
+
 def main():
-    """Shell entry point"""
-    # Process command line arguments
+    """Shell entry point using getopts-style argument parsing"""
+    import getopt
+    
+    # Define options
+    short_opts = "c:dhv"
+    long_opts = ["debug", "help", "version"]
+    
+    # Default values
     debug_mode = False
-    args = sys.argv[1:]
+    command = None
+    script_path = None
     
-    # For debugging - disabled
-    # print(f"DEBUG: Command line arguments: {args}", file=sys.stderr)
-    
-    # Check for help
-    if "-h" in args or "--help" in args:
-        print("Usage: psh [OPTIONS] [SCRIPT_FILE | -c COMMAND]")
-        print("\nOptions:")
-        print("  --debug       Enable debug mode (prints AST before execution)")
-        print("  -h, --help    Show this help message and exit")
-        print("  -c COMMAND    Execute the given command")
-        print("\nExamples:")
-        print("  psh --debug script.sh                 Run script with AST debugging")
-        print("  psh --debug -c 'echo hello'           Run command with AST debugging")
-        print("  psh -c 'for i in 1 2 3; do echo $i; done'   Run a for loop")
-        return 0
-    
-    # Check for --debug flag
-    if "--debug" in args:
-        debug_mode = True
-        args.remove("--debug")
-    
-    # Handle joined arguments like "--debug examples/debug_example.sh"
-    for i, arg in enumerate(args):
-        if arg.startswith("--debug "):
-            debug_mode = True
-            # Extract the script path from the argument
-            script_part = arg[len("--debug "):]
-            args[i] = script_part
-            break
-        elif i == 0 and len(args) == 1 and " " in arg:
-            # Special case: the only argument contains a space
-            parts = arg.split(" ", 1)
-            if parts[0] == "--debug":
+    try:
+        # Parse command line options
+        opts, args = getopt.getopt(sys.argv[1:], short_opts, long_opts)
+        
+        # Process options
+        for opt, arg in opts:
+            if opt in ("-h", "--help"):
+                return print_help()
+            elif opt in ("-v", "--version"):
+                return print_version()
+            elif opt in ("-d", "--debug"):
                 debug_mode = True
-                args[0] = parts[1]  # Set the script path
+            elif opt == "-c":
+                command = arg
     
-    shell = Shell(debug_mode=debug_mode)
-    
-    # Handle command line arguments
-    if args:
-        # Handle -c option to execute a command
-        if args[0] == "-c" and len(args) > 1:
-            command = args[1]
+        # Create shell instance with appropriate debug setting
+        shell = Shell(debug_mode=debug_mode)
+        
+        # Handle command if provided with -c
+        if command is not None:
             try:
                 return shell.execute_line(command) or 0
             except Exception as e:
@@ -342,57 +394,20 @@ def main():
                     import traceback
                     traceback.print_exc()
                 return 1
-        # Handle script file
-        else:
+        
+        # Handle script file if provided as positional argument
+        if args:
             script_path = args[0]
-            try:
-                with open(script_path) as f:
-                    # Read entire script
-                    script_content = f.read()
-                    
-                    # Create a special script execution shell
-                    script_shell = Shell(debug_mode=debug_mode)
-                    
-                    # Skip shebang line if present
-                    lines = script_content.split('\n')
-                    
-                    if lines and lines[0].startswith('#!'):
-                        if debug_mode:
-                            print(f"[DEBUG] Skipping shebang line: {lines[0]}", file=sys.stderr)
-                        start_line = 1
-                    else:
-                        start_line = 0
-                    
-                    # Process script line by line, skipping comments and empty lines
-                    exit_status = 0
-                    for i in range(start_line, len(lines)):
-                        line = lines[i].strip()
-                        if not line or line.startswith('#'):
-                            continue
-                            
-                        if debug_mode:
-                            print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
-                            
-                        try:
-                            result = script_shell.execute_line(line)
-                            if result is not None:
-                                exit_status = result
-                        except Exception as e:
-                            if debug_mode:
-                                print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
-                            exit_status = 1
-                            break
-                    
-                    return exit_status
-            except Exception as e:
-                print(f"Error running script {script_path}: {e}", file=sys.stderr)
-                if debug_mode:
-                    import traceback
-                    traceback.print_exc()
-                return 1
-    
-    # Interactive mode
-    return shell.run()
+            return execute_script(script_path, debug_mode)
+        
+        # No command or script provided, run in interactive mode
+        return shell.run()
+        
+    except getopt.GetoptError as e:
+        # Handle invalid options
+        print(f"Error: {e}", file=sys.stderr)
+        print("Use --help for usage information", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":
