@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# This is a standalone script, not a pytest test file
 
 import time
 import sys
