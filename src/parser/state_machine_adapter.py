@@ -40,6 +40,22 @@ class StateMachineWordExpander:
         # First check if this is a single-quoted string (for compatibility with original)
         if word.startswith("'") and word.endswith("'"):
             return word
+        
+        # Check if this is a double-quoted string with inner quotes - special handling needed
+        if word.startswith('"') and word.endswith('"') and "'" in word:
+            # Preserve the inner single quotes during expansion
+            content = word[1:-1]
+            expanded = self.expander.expand(content)
+            
+            # If the inner single quotes were lost, we need to reinsert them
+            # This handles cases like: "outer 'inner' quotes"
+            if "'" in content and "'" not in expanded:
+                # Re-insert the inner quotes that might have been removed
+                for i, char in enumerate(content):
+                    if char == "'" and expanded[i] != "'":
+                        expanded = expanded[:i] + "'" + expanded[i:]
+            
+            return expanded
             
         return self.expander.expand(word)
     

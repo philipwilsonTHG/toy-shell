@@ -13,6 +13,7 @@ from .parser.token_types import Token, TokenType, create_word_token
 from .parser.lexer import tokenize
 from .parser.parser.shell_parser import ShellParser
 from .parser.expander import expand_variables
+from .parser.state_machine_adapter import StateMachineWordExpander
 from .config.manager import ConfigManager
 from .execution.pipeline import PipelineExecutor
 from .execution.job_manager import JobManager
@@ -33,6 +34,12 @@ class Shell:
         
         # Track last command's exit status
         self.last_exit_status = 0
+        
+        # Initialize word expander for faster variable expansion
+        self.word_expander = StateMachineWordExpander(
+            scope_provider=lambda name: os.environ.get(name),
+            debug_mode=debug_mode
+        )
         
         # Flag to prevent infinite loops during test collection
         self.collecting_tests = os.environ.get('PYTEST_RUNNING') == '1'
@@ -126,9 +133,11 @@ class Shell:
                     
                     return last_status
                 
-            # Handle $? special variable expansion
+            # Handle $? special variable expansion using state machine expander
             if "$?" in line:
-                line = line.replace("$?", str(self.last_exit_status))
+                # Temporarily update the environment to include the latest exit status
+                os.environ["?"] = str(self.last_exit_status)
+                line = self.word_expander.expand(line)
                 
             # Handle history execution with ! prefix
             if line.startswith('!'):

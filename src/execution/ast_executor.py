@@ -15,6 +15,8 @@ from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
 from ..parser.expander import expand_all, expand_braces
 from ..parser.token_types import Token, TokenType, create_word_token
+# Import both expanders to allow for fall back if needed
+from ..parser.state_machine_adapter import StateMachineWordExpander
 from ..parser.word_expander import WordExpander
 
 
@@ -84,7 +86,8 @@ class ASTExecutor(ASTVisitor):
         self.current_scope = self.global_scope
         
         # Create word expander with current scope as variable provider
-        self.word_expander = WordExpander(
+        # Use the optimized state machine implementation
+        self.word_expander = StateMachineWordExpander(
             scope_provider=lambda name: self.current_scope.get(name),
             debug_mode=debug_mode
         )
