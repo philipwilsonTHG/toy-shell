@@ -138,18 +138,41 @@ class ASTExecutor(ASTVisitor):
             return result
             
         # Special handling for variable assignments (VAR=value command)
-        assignment_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)', node.command)
-        if assignment_match and not node.args[1:]:
-            var_name = assignment_match.group(1)
-            var_value = assignment_match.group(2)
-            
-            # Strip quotes if present
-            if (var_value.startswith('"') and var_value.endswith('"')) or \
-               (var_value.startswith("'") and var_value.endswith("'")):
-                var_value = var_value[1:-1]
+        # Check for two cases:
+        # 1. Regular variable assignment: VAR=value
+        # 2. Split command that should be a variable assignment: 'VAR=' '$((expression))'
+        if not node.args[1:] and '=' in node.command:
+            # Case 1: Regular VAR=value assignment
+            assignment_match = re.match(r'^([a-zA-Z_][a-zA-Z0-9_]*)=(.*)', node.command)
+            if assignment_match:
+                var_name = assignment_match.group(1)
+                var_value = assignment_match.group(2)
                 
-            self.current_scope.set(var_name, var_value)
-            return 0
+                # Strip quotes if present
+                if (var_value.startswith('"') and var_value.endswith('"')) or \
+                   (var_value.startswith("'") and var_value.endswith("'")):
+                    var_value = var_value[1:-1]
+                
+                # Expand variables and arithmetic expressions in the value
+                var_value = self.word_expander.expand(var_value)
+                
+                self.current_scope.set(var_name, var_value)
+                return 0
+        # Case 2: Split assignment like 'count=' '$((count-1))'
+        elif len(node.args) == 2 and node.command.endswith('='):
+            var_name = node.command[:-1]  # Remove the = sign
+            var_value = node.args[1]
+            
+            # Validation - only allow valid variable names
+            if re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', var_name):
+                # Expand the value - this handles both variables and arithmetic expressions
+                expanded_value = self.word_expander.expand(var_value)
+                
+                if self.debug_mode:
+                    print(f"[DEBUG] Variable assignment: {var_name}={expanded_value}", file=sys.stderr)
+                
+                self.current_scope.set(var_name, expanded_value)
+                return 0
             
         # Handle builtin command 'test' or '['
         if node.command in ['test', '[']:
@@ -429,6 +452,25 @@ class ASTExecutor(ASTVisitor):
         
         if not args:
             return 1  # Empty test is false
+            
+        # Expand variables in all arguments
+        expanded_args = []
+        for arg in args:
+            if arg.startswith('$'):
+                # This is a variable reference, expand it
+                var_name = arg[1:]
+                var_value = self.current_scope.get(var_name)
+                if var_value is None:
+                    var_value = ''  # Empty string for undefined variables
+                expanded_args.append(var_value)
+                
+                if self.debug_mode:
+                    print(f"[DEBUG] Test: Expanding ${var_name} to '{var_value}'", file=sys.stderr)
+            else:
+                expanded_args.append(arg)
+                
+        # Now use the expanded args for testing
+        args = expanded_args
         
         # Define operation handlers using dictionaries
         # File test operations (take one argument after the operator)
@@ -461,19 +503,33 @@ class ASTExecutor(ASTVisitor):
             '-ge': lambda a, b: safe_numeric_compare(a, b, lambda x, y: x >= y),  # Greater than or equal
         }
         
+        if self.debug_mode:
+            print(f"[DEBUG] Test command with args: {args}", file=sys.stderr)
+        
         # Handle file tests (format: -e file)
         if len(args) == 2 and args[0] in file_tests:
-            return 0 if file_tests[args[0]](args[1]) else 1
+            result = file_tests[args[0]](args[1])
+            if self.debug_mode:
+                print(f"[DEBUG] File test: {args[0]} {args[1]} -> {result}", file=sys.stderr)
+            return 0 if result else 1
             
         # Handle two-operand tests (format: arg1 OP arg2)
         if len(args) == 3:
             # String comparison
             if args[1] in string_tests:
-                return 0 if string_tests[args[1]](args[0], args[2]) else 1
+                result = string_tests[args[1]](args[0], args[2])
+                if self.debug_mode:
+                    print(f"[DEBUG] String comparison: '{args[0]}' {args[1]} '{args[2]}' -> {result}", file=sys.stderr)
+                return 0 if result else 1
                 
             # Numeric comparison
             if args[1] in numeric_tests:
-                return 0 if numeric_tests[args[1]](args[0], args[2]) else 1
+                result = numeric_tests[args[1]](args[0], args[2])
+                if self.debug_mode:
+                    print(f"[DEBUG] Numeric comparison: {args[0]} {args[1]} {args[2]} -> {result}", file=sys.stderr)
+                return 0 if result else 1
         
         # Default to false for unrecognized tests
+        if self.debug_mode:
+            print(f"[DEBUG] Unrecognized test, defaulting to false", file=sys.stderr)
         return 1

@@ -62,6 +62,9 @@ class WordExpander:
     
     def _expand_variables(self, text: str) -> str:
         """Expand variables in the given text"""
+        # Check for arithmetic expressions first
+        result = self._expand_arithmetic(text)
+        
         # Use regex to find variable references
         var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
         
@@ -74,8 +77,69 @@ class WordExpander:
             return var_value or ''
             
         # Replace all variable references
-        expanded = var_pattern.sub(replace_var, text)
+        expanded = var_pattern.sub(replace_var, result)
         return expanded
+        
+    def _expand_arithmetic(self, text: str) -> str:
+        """
+        Expand arithmetic expressions like $((expression)) in the given text
+        
+        Args:
+            text: The text to process
+            
+        Returns:
+            The text with arithmetic expressions evaluated
+        """
+        # Pattern for matching arithmetic expressions
+        arith_pattern = re.compile(r'\$\(\((.*?)\)\)')
+        
+        def evaluate_expression(match):
+            expression = match.group(1)
+            
+            # Define local variables dictionary for the expression
+            variables = {}
+            
+            # Extract variable names from the expression (without $ prefix)
+            var_names = re.findall(r'([a-zA-Z_][a-zA-Z0-9_]*)', expression)
+            
+            # Resolve each variable and add to our variables dictionary
+            for var_name in var_names:
+                var_value = self.scope_provider(var_name)
+                if var_value is None:
+                    variables[var_name] = 0  # Default to 0 for undefined variables
+                else:
+                    try:
+                        # Try to convert to number
+                        variables[var_name] = int(var_value)
+                    except ValueError:
+                        variables[var_name] = 0  # Default to 0 for non-numeric values
+                        
+            # Use the variables in expression evaluation context
+            if self.debug_mode:
+                import sys
+                print(f"[DEBUG] Evaluating with variables: {variables}", file=sys.stderr)
+            
+            try:
+                # For safety, we'll parse and evaluate the expression manually using the variables
+                # First, provide the correct variables for the context
+                eval_context = variables.copy()
+                
+                # Evaluate the expression
+                result = eval(expression, {"__builtins__": {}}, eval_context)
+                
+                if self.debug_mode:
+                    import sys
+                    print(f"[DEBUG] Evaluating arithmetic expression: '{expression}' -> {result}", file=sys.stderr)
+                
+                return str(result)
+            except Exception as e:
+                if self.debug_mode:
+                    import sys
+                    print(f"[DEBUG] Error evaluating arithmetic expression: '{expression}': {e}", file=sys.stderr)
+                return "0"  # Default to 0 on error
+        
+        # Replace all arithmetic expressions
+        return arith_pattern.sub(evaluate_expression, text)
     
     def handle_escaped_dollars(self, text: str) -> str:
         """
