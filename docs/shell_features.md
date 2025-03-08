@@ -43,6 +43,36 @@ echo \$VAR                    # Escaped variables not expanded
 
 ## Advanced Features
 
+### Brace Expansion
+
+The shell supports brace expansion for generating strings that follow a pattern:
+
+```bash
+# Basic comma-separated patterns
+echo {a,b,c}           # Outputs: a b c
+echo file.{txt,md,py}  # Outputs: file.txt file.md file.py
+
+# Ranges
+echo {1..5}            # Outputs: 1 2 3 4 5
+echo {a..e}            # Outputs: a b c d e
+echo {Z..V}            # Outputs: Z Y X W V
+
+# Prefixes and suffixes
+echo pre{1,2,3}post    # Outputs: pre1post pre2post pre3post
+
+# Nested braces
+echo {a,b{1,2,3},c}    # Outputs: a b1 b2 b3 c
+
+# Multiple brace expansions
+echo {a,b}_{1,2}       # Outputs: a_1 a_2 b_1 b_2
+
+# Empty elements
+echo a{,b,c}d          # Outputs: ad abd acd
+
+# Path generation
+echo /usr/{local/{bin,lib},bin}  # Outputs: /usr/local/bin /usr/local/lib /usr/bin
+```
+
 ### Arithmetic Expansion
 
 The shell supports arithmetic expansion using the POSIX `$(( expression ))` syntax:

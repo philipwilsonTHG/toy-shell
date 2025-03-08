@@ -62,6 +62,7 @@ The `Shell` class is the primary entry point that:
 
 #### Expander (`src/parser/expander.py`)
 - Handles various types of shell expansions:
+  - Brace expansion (`{a,b,c}`, `{1..5}`)
   - Variable expansion (`$VAR`, `${VAR}`)
   - Command substitution (`$(cmd)`, <code>\`cmd\`</code>)
   - Tilde expansion (`~`)
