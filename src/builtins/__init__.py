@@ -3,7 +3,7 @@ Built-in shell commands
 """
 
 from typing import Dict, Callable, Any
-from .core import cd, exit_shell, version, source
+from .core import cd, exit_shell, version, source, function_command
 from .env import export, unset
 from .jobs import jobs, bg, fg
 from .history import history
@@ -25,5 +25,6 @@ BUILTINS: Dict[str, Callable[..., Any]] = {
     ".": source,
     "source": source,
     "test": test_command,
-    "[": test_command
+    "[": test_command,
+    "function": function_command
 }

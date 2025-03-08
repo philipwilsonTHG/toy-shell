@@ -86,6 +86,12 @@ class FunctionDefinitionRule(GrammarRule):
             # Parse a compound statement
             body = self._parse_compound_statement(stream, context)
         else:
+            # Check if the next token might be the start of a block on the next line
+            if stream.is_at_end() or stream.peek().token_type != TokenType.WORD:
+                # Assume this might be a multi-line function with the opening brace on the next line
+                context.mark_in_progress()
+                return None
+                
             # Parse a simple command
             command_rule = CommandRule()
             body = command_rule.parse(stream, context)

@@ -146,3 +146,45 @@ def source(filename: Optional[str] = None) -> int:
     except Exception as e:
         sys.stderr.write(f"source: error reading {filename}: {e}\n")
         return 1
+
+
+def function_command(name: str = None, *args) -> int:
+    """Define a shell function.
+    
+    This is only used as a fallback for when the parser doesn't recognize
+    a function definition correctly.
+    
+    Usage:
+        function name() { commands; }
+    
+    Returns:
+        0 on success, 1 on error
+    """
+    from ..context import SHELL
+    
+    # Need at least a name
+    if not name:
+        print("function: missing function name", file=sys.stderr)
+        return 1
+    
+    # Get the current shell instance
+    shell_instance = SHELL.get_current_shell()
+    if not shell_instance:
+        print("function: no active shell instance", file=sys.stderr)
+        return 1
+    
+    # Use the shell to execute the function definition properly
+    try:
+        # Build the function definition
+        function_def = f"function {name}"
+        if args:
+            function_def += "() { " + "; ".join(args) + "; }"
+        else:
+            function_def += "() { :; }" # Empty function
+        
+        # Execute the function definition
+        shell_instance.execute_line(function_def)
+        return 0
+    except Exception as e:
+        print(f"function: error defining function {name}: {e}", file=sys.stderr)
+        return 1

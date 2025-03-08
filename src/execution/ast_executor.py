@@ -101,6 +101,23 @@ class ASTExecutor(ASTVisitor):
         if self.debug_mode:
             print("[DEBUG] Executing AST:", file=sys.stderr)
             self._print_ast(node)
+        
+        # Special handling for function bodies
+        # If this is a command node with '{' as the command, it's likely a function body
+        # We need to handle this specially to avoid trying to execute '{' as a command
+        if isinstance(node, CommandNode) and node.command == '{':
+            if self.debug_mode:
+                print("[DEBUG] Detected function body - special handling", file=sys.stderr)
+            # Extract the commands from within the braces and execute them one by one
+            body_commands = node.args[1:-1] if len(node.args) > 2 else []
+            for cmd in body_commands:
+                if cmd != '{' and cmd != '}' and not cmd.startswith('"') and not cmd.startswith("'"):
+                    # Execute each command in the body
+                    # But skip the opening/closing braces and quotes
+                    if self.debug_mode:
+                        print(f"[DEBUG] Executing function body command: {cmd}", file=sys.stderr)
+                    self.execute_line(cmd)
+            return 0
             
         result = node.accept(self)
         
@@ -109,6 +126,20 @@ class ASTExecutor(ASTVisitor):
             return self.last_status
             
         return result
+        
+    def execute_line(self, line: str) -> int:
+        """Execute a single line of shell code"""
+        # Add a small helper method to parse and execute a line
+        from ..parser.lexer import tokenize
+        from ..parser.parser.shell_parser import ShellParser
+        
+        parser = ShellParser()
+        tokens = tokenize(line)
+        ast = parser.parse(tokens)
+        
+        if ast:
+            return self.execute(ast)
+        return 0
     
     def _print_ast(self, node: Node, indent: int = 0):
         """Print an AST node with indentation for debugging"""
@@ -130,6 +161,12 @@ class ASTExecutor(ASTVisitor):
             
             # Set positional parameters as variables
             for i, arg in enumerate(node.args[1:], 1):
+                # Strip quotes from the arguments if present
+                if (arg.startswith('"') and arg.endswith('"')) or \
+                   (arg.startswith("'") and arg.endswith("'")):
+                    arg = arg[1:-1]
+                
+                # Store the argument without quotes
                 self.current_scope.set(str(i), arg)
             
             # Execute function body

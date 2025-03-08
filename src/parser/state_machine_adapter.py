@@ -6,6 +6,7 @@ with the existing WordExpander interface.
 
 from typing import Optional, Callable, Dict, List
 import os
+import sys
 
 from .state_machine_expander import StateMachineExpander
 
@@ -45,6 +46,21 @@ class StateMachineWordExpander:
         if word.startswith("'") and word.endswith("'"):
             return word
         
+        # Special handling for positional parameters (e.g., $1, $2)
+        # This is needed to ensure they are properly expanded even within strings
+        if '$' in word:
+            for i in range(1, 10):  # Handle $1 through $9
+                pos_param = f'${i}'
+                
+                if pos_param in word:
+                    value = self.expander.scope_provider(str(i)) if self.expander.scope_provider else None
+                    
+                    if value is not None:
+                        if self.debug_mode:
+                            print(f"[DEBUG] Expanded ${i} to '{value}'", file=sys.stderr)
+                        # Replace directly
+                        word = word.replace(pos_param, value)
+        
         # Check if this is a double-quoted string with inner quotes - special handling needed
         if word.startswith('"') and word.endswith('"') and "'" in word:
             # Preserve the inner single quotes during expansion
@@ -56,7 +72,7 @@ class StateMachineWordExpander:
             if "'" in content and "'" not in expanded:
                 # Re-insert the inner quotes that might have been removed
                 for i, char in enumerate(content):
-                    if char == "'" and expanded[i] != "'":
+                    if char == "'" and i < len(expanded) and expanded[i] != "'":
                         expanded = expanded[:i] + "'" + expanded[i:]
             
             return expanded
