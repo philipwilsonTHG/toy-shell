@@ -15,6 +15,7 @@ from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
 from ..parser.expander import expand_all, expand_braces
 from ..parser.token_types import Token, TokenType, create_word_token
+from ..parser.word_expander import WordExpander
 
 
 class ExecutionError(Exception):
@@ -81,6 +82,12 @@ class ASTExecutor(ASTVisitor):
         self.function_registry = FunctionRegistry()
         self.global_scope = Scope()
         self.current_scope = self.global_scope
+        
+        # Create word expander with current scope as variable provider
+        self.word_expander = WordExpander(
+            scope_provider=lambda name: self.current_scope.get(name),
+            debug_mode=debug_mode
+        )
     
     def execute(self, node: Node) -> int:
         """Execute an AST node"""
@@ -214,8 +221,8 @@ class ASTExecutor(ASTVisitor):
         tokens = []
         
         # Handle command expansion
-        fixed_command = self._handle_escaped_dollars(command)
-        expanded_command = self.expand_word(fixed_command)
+        fixed_command = self.word_expander.handle_escaped_dollars(command)
+        expanded_command = self.word_expander.expand(fixed_command)
         
         # Handle brace expansion in the command itself
         if ' ' in expanded_command:
@@ -233,10 +240,10 @@ class ASTExecutor(ASTVisitor):
             is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
             
             # First handle escaped dollar signs, converting \$ to $ prior to expansion
-            fixed_arg = self._handle_escaped_dollars(arg)
+            fixed_arg = self.word_expander.handle_escaped_dollars(arg)
             
             # Expand the argument
-            expanded_arg = self.expand_word(fixed_arg)
+            expanded_arg = self.word_expander.expand(fixed_arg)
             
             # For debugging
             if self.debug_mode:
@@ -267,26 +274,13 @@ class ASTExecutor(ASTVisitor):
                 tokens.append(Token('&1', TokenType.OPERATOR))
             else:
                 tokens.append(Token(redir_op, TokenType.OPERATOR))
-                fixed_target = self._handle_escaped_dollars(redir_target)
-                expanded_target = self.expand_word(fixed_target)
+                fixed_target = self.word_expander.handle_escaped_dollars(redir_target)
+                expanded_target = self.word_expander.expand(fixed_target)
                 tokens.append(create_word_token(expanded_target))
                 
         return tokens
         
-    def _handle_escaped_dollars(self, text: str) -> str:
-        """
-        Handle escaped dollar signs, converting escaped $ to $ for variable substitution
-        
-        Args:
-            text: The text to process
-        
-        Returns:
-            The text with escaped dollars converted
-        """
-        # Check for backslash-dollar sequences
-        if '\\$' in text:
-            return text.replace('\\$', '$')
-        return text
+    # The _handle_escaped_dollars method has been moved to WordExpander class
     
     def visit_pipeline(self, node: PipelineNode) -> int:
         """Execute a pipeline of commands"""
@@ -353,7 +347,7 @@ class ASTExecutor(ASTVisitor):
         expanded_words = []
         for word in node.words:
             # First expand variables in the word
-            expanded_word = self.expand_word(word)
+            expanded_word = self.word_expander.expand(word)
             
             # Then handle globs
             if any(c in expanded_word for c in '*?['):
@@ -384,11 +378,11 @@ class ASTExecutor(ASTVisitor):
     def visit_case(self, node: CaseNode) -> int:
         """Execute a case statement"""
         # Expand the word
-        word = self.expand_word(node.word)
+        word = self.word_expander.expand(node.word)
         
         # Check each pattern
         for item in node.items:
-            pattern = self.expand_word(item.pattern)
+            pattern = self.word_expander.expand(item.pattern)
             
             # Match pattern against word
             if self.pattern_match(word, pattern):
@@ -448,37 +442,7 @@ class ASTExecutor(ASTVisitor):
         
         return result
     
-    def expand_word(self, word: str) -> str:
-        """Expand variables, braces, and other patterns in a word"""
-        # Check for brace expansion first
-        if '{' in word and not (word.startswith("'") and word.endswith("'")):
-            # Perform brace expansion
-            brace_expansions = expand_braces(word)
-            if len(brace_expansions) > 1:
-                # Join the brace expansions with spaces
-                expanded_word = ' '.join(brace_expansions)
-                if self.debug_mode:
-                    print(f"[DEBUG] Brace expansion: '{word}' -> '{expanded_word}'", file=sys.stderr)
-                return expanded_word
-        
-        # Use the full expander for complete expansion
-        expanded = expand_all(word)
-        
-        # Handle any environment variable expansion the expander missed
-        # (especially for variables defined within the shell but not in environment)
-        var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
-        
-        def replace_var(match):
-            var_name = match.group(1)
-            var_value = self.current_scope.get(var_name)
-            if self.debug_mode:
-                print(f"[DEBUG] Expanding ${var_name} to '{var_value}'", file=sys.stderr)
-            return var_value or ''
-            
-        expanded = var_pattern.sub(replace_var, expanded)
-        
-        # Return expanded word
-        return expanded
+    # The expand_word method has been moved to WordExpander class
     
     def pattern_match(self, word: str, pattern: str) -> bool:
         """Match a word against a shell pattern"""
