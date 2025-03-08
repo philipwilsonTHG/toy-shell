@@ -3,6 +3,7 @@
 import os
 import sys
 import signal
+import re
 from typing import Optional, List
 
 from .context import SHELL
@@ -356,25 +357,140 @@ def execute_script(script_path, debug_mode=False):
             else:
                 start_line = 0
             
-            # Process script line by line, skipping comments and empty lines
+            # Process script with special handling for multiline constructs
             exit_status = 0
-            for i in range(start_line, len(lines)):
+            i = start_line
+            
+            # Function to check if a line starts a function declaration
+            def is_function_start(line):
+                return line.strip().startswith('function ') or re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\(\)\s*\{', line.strip())
+            
+            # Function to collect until the end of function (closing brace)
+            def collect_function(start_idx):
+                # First line - check if it already contains opening brace
+                first_line = lines[start_idx].strip()
+                func_lines = [first_line]
+                
+                # If the opening brace is on the same line as function declaration
+                if '{' in first_line:
+                    brace_count = 1
+                else:
+                    brace_count = 0  # Will detect it on subsequent lines
+                
+                idx = start_idx + 1
+                
+                # Keep collecting lines until we find the matching closing brace
+                while idx < len(lines):
+                    line = lines[idx].strip()
+                    
+                    # Skip comments and empty lines
+                    if not line or line.startswith('#'):
+                        idx += 1
+                        continue
+                    
+                    # Add to function lines
+                    func_lines.append(line)
+                    
+                    # If we haven't seen an opening brace yet, check if this line has it
+                    if brace_count == 0 and '{' in line:
+                        brace_count = 1
+                    else:
+                        # Count additional opening and closing braces
+                        if '{' in line:
+                            brace_count += line.count('{')
+                        if '}' in line:
+                            brace_count -= line.count('}')
+                    
+                    # If braces are balanced, we've found the end of the function
+                    if brace_count > 0 and brace_count <= 0:
+                        return func_lines, idx
+                    
+                    # If this line has the closing brace and we've seen an opening brace
+                    if '}' in line and brace_count <= 0:
+                        return func_lines, idx
+                    
+                    idx += 1
+                
+                # If we reach here, we never found the closing brace
+                return func_lines, idx - 1
+            
+            while i < len(lines):
                 line = lines[i].strip()
+                
+                # Skip comments and empty lines
                 if not line or line.startswith('#'):
+                    i += 1
                     continue
+                
+                # Check if this is a function definition
+                if is_function_start(line):
+                    # Collect all lines of the function
+                    func_lines, end_idx = collect_function(i)
                     
-                if debug_mode:
-                    print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
+                    # Process lines to ensure correct separation
+                    # First line is special - it's the function declaration with opening brace
+                    # The rest are the function body commands that need to be separated by semicolons
+                    if len(func_lines) > 0:
+                        func_declaration = func_lines[0]
+                        body_lines = []
+                        
+                        for l in func_lines[1:]:
+                            # Strip trailing semicolons to avoid doubled semicolons
+                            l = l.rstrip(';').strip()
+                            if l:  # Only add non-empty lines
+                                body_lines.append(l)
+                        
+                        # Ensure opening brace is part of the declaration
+                        if '{' not in func_declaration:
+                            func_declaration += ' {'
+                        
+                        # Join body lines with semicolons
+                        if body_lines:
+                            body = '; '.join(body_lines)
+                            # Check if the last line has the closing brace
+                            if not body.rstrip().endswith('}'):
+                                body += '; }'
+                            func_definition = func_declaration + ' ' + body
+                        else:
+                            # Empty function
+                            func_definition = func_declaration + ' }'
+                    else:
+                        # Shouldn't happen, but just in case
+                        func_definition = func_lines[0] if func_lines else ""
                     
-                try:
-                    result = script_shell.execute_line(line)
-                    if result is not None:
-                        exit_status = result
-                except Exception as e:
                     if debug_mode:
-                        print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
-                    exit_status = 1
-                    break
+                        print(f"[DEBUG] Executing function definition: {func_definition}", file=sys.stderr)
+                    elif "SHELL_DEBUG" in os.environ:
+                        print(f"[SHELL_DEBUG] Executing function definition: {func_definition}", file=sys.stderr)
+                    
+                    try:
+                        result = script_shell.execute_line(func_definition)
+                        if result is not None:
+                            exit_status = result
+                    except Exception as e:
+                        if debug_mode:
+                            print(f"[DEBUG] Error executing function: {e}", file=sys.stderr)
+                        exit_status = 1
+                        break
+                    
+                    # Skip to the end of the function
+                    i = end_idx + 1
+                else:
+                    # Regular line execution
+                    if debug_mode:
+                        print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
+                    
+                    try:
+                        result = script_shell.execute_line(line)
+                        if result is not None:
+                            exit_status = result
+                    except Exception as e:
+                        if debug_mode:
+                            print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
+                        exit_status = 1
+                        break
+                    
+                    i += 1
             
             return exit_status
     except FileNotFoundError:
