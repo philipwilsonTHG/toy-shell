@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
+"""
+State Machine based implementation for shell variable expansion.
+Provides a more efficient tokenizer and expander using state machine approach.
+"""
 
-import os
 import sys
 import re
 import enum
 import subprocess
-from typing import List, Dict, Optional, Tuple, Callable, Any, Union, Iterator
+from typing import List, Dict, Optional, Callable
 
 
 class TokenType(enum.Enum):
@@ -25,8 +28,8 @@ class TokenType(enum.Enum):
 class Token:
     """Token representation for the state machine expander"""
     
-    def __init__(self, type: TokenType, value: str, raw: str = None):
-        self.type = type
+    def __init__(self, token_type: TokenType, value: str, raw: Optional[str] = None):
+        self.type = token_type
         self.value = value
         # Raw text is useful for preserving original text when needed
         self.raw = raw if raw is not None else value
@@ -102,7 +105,7 @@ class StateContext:
             return self.text[self.pos + 1]
         return ''
     
-    def add_token(self, type: TokenType, value: str = None, raw: str = None):
+    def add_token(self, token_type: TokenType, value: Optional[str] = None, raw: Optional[str] = None):
         """Add a token to the list"""
         if value is None:
             # Use the text between current_token_start and current position
@@ -112,7 +115,7 @@ class StateContext:
             # Use the same text for raw value
             raw = self.text[self.current_token_start:self.pos]
             
-        self.tokens.append(Token(type, value, raw))
+        self.tokens.append(Token(token_type, value, raw))
         # Reset for the next token
         self.current_token_start = self.pos
         self.current_token_type = TokenType.LITERAL

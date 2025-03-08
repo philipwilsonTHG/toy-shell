@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
+"""
+Adapter class for the state machine expander to maintain compatibility
+with the existing WordExpander interface.
+"""
 
-from typing import Optional, Callable, Dict, Any
+from typing import Optional, Callable, Dict
 
 from .state_machine_expander import StateMachineExpander
 
@@ -21,7 +25,7 @@ class StateMachineWordExpander:
         """
         self.expander = StateMachineExpander(scope_provider, debug_mode)
         self.debug_mode = debug_mode
-        self.var_cache = {}
+        self.var_cache: Dict[str, str] = {}
     
     def expand(self, word: str) -> str:
         """
@@ -50,6 +54,8 @@ class StateMachineWordExpander:
         Legacy method for compatibility - not used directly
         """
         if text.startswith('$((') and text.endswith('))'):
+            # Use private method of expander for compatibility
+            # pylint: disable=protected-access
             return self.expander._expand_arithmetic(text)
         return self.expander.expand(text)
     
