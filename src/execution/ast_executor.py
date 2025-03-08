@@ -12,6 +12,7 @@ from ..parser.ast import (
 )
 from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
+from ..parser.expander import expand_all, expand_braces
 
 
 class ExecutionError(Exception):
@@ -190,7 +191,16 @@ class ASTExecutor(ASTVisitor):
         # Handle escaped dollar signs first (before expansion)
         fixed_command = self._handle_escaped_dollars(node.command)
         expanded_command = self.expand_word(fixed_command)
-        tokens.append(create_word_token(expanded_command))
+        
+        # Handle brace expansion in the command itself
+        if ' ' in expanded_command:
+            # Split into multiple tokens - first one is the command, rest are args
+            words = expanded_command.split()
+            tokens.append(create_word_token(words[0]))
+            for word in words[1:]:
+                tokens.append(create_word_token(word))
+        else:
+            tokens.append(create_word_token(expanded_command))
         
         for arg in node.args[1:]:
             # Check if we need to preserve spaces for quotes
@@ -206,9 +216,17 @@ class ASTExecutor(ASTVisitor):
             if self.debug_mode:
                 print(f"[DEBUG] Processing arg: '{arg}' => '{expanded_arg}' (quoted: {is_quoted_arg})", file=sys.stderr)
             
-            # Create a special token attribute to mark quoted arguments
-            token = create_word_token(expanded_arg, quoted=is_quoted_arg)
-            tokens.append(token)
+            # Handle brace expansion results - may contain spaces that need word splitting
+            if ' ' in expanded_arg and not is_quoted_arg:
+                # Split the expanded result into multiple tokens
+                for word in expanded_arg.split():
+                    if self.debug_mode:
+                        print(f"[DEBUG] Word splitting: '{expanded_arg}' -> '{word}'", file=sys.stderr)
+                    tokens.append(create_word_token(word, quoted=False))
+            else:
+                # Create a special token attribute to mark quoted arguments
+                token = create_word_token(expanded_arg, quoted=is_quoted_arg)
+                tokens.append(token)
             
         # Add redirections with variable expansion
         for redir_op, redir_target in node.redirections:
@@ -257,12 +275,33 @@ class ASTExecutor(ASTVisitor):
             # Add command and args with variable expansion
             fixed_command = self._handle_escaped_dollars(cmd.command)
             expanded_command = self.expand_word(fixed_command)
-            tokens.append(create_word_token(expanded_command))
+            
+            # Handle brace expansion in the command itself
+            if ' ' in expanded_command:
+                # Split into multiple tokens - first one is the command, rest are args
+                words = expanded_command.split()
+                tokens.append(create_word_token(words[0]))
+                for word in words[1:]:
+                    tokens.append(create_word_token(word))
+            else:
+                tokens.append(create_word_token(expanded_command))
             
             for arg in cmd.args[1:]:
                 fixed_arg = self._handle_escaped_dollars(arg)
                 expanded_arg = self.expand_word(fixed_arg)
-                tokens.append(create_word_token(expanded_arg))
+                
+                # Check if this is a quoted argument that should have spaces preserved
+                is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
+                
+                # Handle brace expansion results - may contain spaces that need word splitting
+                if ' ' in expanded_arg and not is_quoted_arg:
+                    # Split the expanded result into multiple tokens
+                    for word in expanded_arg.split():
+                        if self.debug_mode:
+                            print(f"[DEBUG] Word splitting in pipeline: '{expanded_arg}' -> '{word}'", file=sys.stderr)
+                        tokens.append(create_word_token(word, quoted=False))
+                else:
+                    tokens.append(create_word_token(expanded_arg, quoted=is_quoted_arg))
             
             # Add redirections with variable expansion
             for redir_op, redir_target in cmd.redirections:
@@ -432,34 +471,23 @@ class ASTExecutor(ASTVisitor):
         return result
     
     def expand_word(self, word: str) -> str:
-        """Expand variables in a word"""
-        # Replace variables with their values
-        expanded = word
-        
-        # Handle escaped dollar signs (convert \$ to $)
-        escaped_pattern = re.compile(r'\\(\$)')
-        expanded = escaped_pattern.sub(r'\1', expanded)
-        
-        # Special case for quoted strings - remove quotes and handle separately
-        if (word.startswith('"') and word.endswith('"')):
-            inner_content = word[1:-1]
-            # Apply variable expansion on the inner content
-            expanded = inner_content
-            
-            # Simple variable expansion
-            var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
-            
-            def replace_var(match):
-                var_name = match.group(1)
-                var_value = self.current_scope.get(var_name)
+        """Expand variables, braces, and other patterns in a word"""
+        # Check for brace expansion first
+        if '{' in word and not (word.startswith("'") and word.endswith("'")):
+            # Perform brace expansion
+            brace_expansions = expand_braces(word)
+            if len(brace_expansions) > 1:
+                # Join the brace expansions with spaces
+                expanded_word = ' '.join(brace_expansions)
                 if self.debug_mode:
-                    print(f"[DEBUG] Expanding ${var_name} to '{var_value}' in quoted string", file=sys.stderr)
-                return var_value or ''
-                
-            expanded = var_pattern.sub(replace_var, expanded)
-            return expanded
+                    print(f"[DEBUG] Brace expansion: '{word}' -> '{expanded_word}'", file=sys.stderr)
+                return expanded_word
         
-        # Simple variable expansion
+        # Use the full expander for complete expansion
+        expanded = expand_all(word)
+        
+        # Handle any environment variable expansion the expander missed
+        # (especially for variables defined within the shell but not in environment)
         var_pattern = re.compile(r'\$([a-zA-Z_][a-zA-Z0-9_]*|\d+|[\*\@\#\?\$\!])')
         
         def replace_var(match):

@@ -10,6 +10,7 @@ A feature-rich Unix shell implemented in Python with modern features and robust 
 - Environment variable management
 - Command substitution $(command)
 - Arithmetic expansion $(( expression ))
+- Brace expansion {a,b,c} and {1..5}
 - Control structures (if, for, while, case)
 - Proper signal handling
 - Configurable prompt
