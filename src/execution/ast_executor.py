@@ -3,8 +3,9 @@
 import os
 import re
 import sys
+import glob
 import fnmatch
-from typing import Dict, List, Optional, Any, Tuple
+from typing import Dict, List, Optional, Any, Tuple, Callable
 
 from ..parser.ast import (
     ASTVisitor, Node, CommandNode, PipelineNode, IfNode, WhileNode,
@@ -13,6 +14,7 @@ from ..parser.ast import (
 from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
 from ..parser.expander import expand_all, expand_braces
+from ..parser.token_types import Token, TokenType, create_word_token
 
 
 class ExecutionError(Exception):
@@ -183,8 +185,6 @@ class ASTExecutor(ASTVisitor):
             return self.handle_test_command(node.args)
         
         # Regular command execution using pipeline executor
-        from ..parser.token_types import Token, TokenType, create_word_token
-        
         # Create tokens from command, expanding variables
         tokens = []
         
@@ -268,8 +268,6 @@ class ASTExecutor(ASTVisitor):
     def visit_pipeline(self, node: PipelineNode) -> int:
         """Execute a pipeline of commands"""
         # Convert back to tokens for pipeline executor
-        from ..parser.token_types import Token, TokenType, create_word_token
-        
         tokens = []
         for i, cmd in enumerate(node.commands):
             # Add command and args with variable expansion
@@ -378,7 +376,6 @@ class ASTExecutor(ASTVisitor):
             
             # Then handle globs
             if any(c in expanded_word for c in '*?['):
-                import glob
                 matches = glob.glob(expanded_word)
                 if matches:
                     expanded_words.extend(matches)
