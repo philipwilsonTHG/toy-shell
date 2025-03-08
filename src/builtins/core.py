@@ -62,14 +62,19 @@ def exit_shell(status_code: str = "0") -> int:
         sys.stderr.write(f"exit: invalid status code: {status_code}\n")
         return -1001  # Special error exit code
 
-def version() -> None:
-    """Display shell version information"""
+def version() -> int:
+    """Display shell version information
+    
+    Returns:
+        int: Always returns 0 (success)
+    """
     try:
         from .. import __version__
         print(f"Python Shell version {__version__}")
     except (ImportError, AttributeError):
         print("Python Shell version 0.1.0")
     print(f"Python {sys.version}")
+    return 0
 
 def source(filename: Optional[str] = None) -> int:
     """Execute commands from a file
