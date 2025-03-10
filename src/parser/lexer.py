@@ -5,7 +5,6 @@ import re
 import sys
 
 from .token_types import Token, TokenType, KEYWORDS, create_word_token, create_operator_token, create_substitution_token, create_arithmetic_token
-from .redirection import RedirectionParser, RedirectionType
 
 class Lexer:
     """Shell script lexer that handles tokenization with proper context tracking"""
@@ -274,18 +273,7 @@ class Lexer:
             self.tokens.append(create_substitution_token(line[i:cmd_end + 1]))
             return cmd_end + 1
             
-        # Handle special case for "$date)" to match existing tests
         if i + 1 < len(line):
-            # If we're looking at "$date)" special case
-            if line[i:].startswith("$date)"):
-                if self.buffer:
-                    self.tokens.append(create_word_token(''.join(self.buffer)))
-                    self.buffer = []
-                # Split into separate tokens
-                self.tokens.append(create_word_token("$"))
-                self.tokens.append(create_word_token("date)"))
-                return i + 6  # Skip "$date)"
-            
             # Check for variable name followed by closing paren
             if ')' in line[i:]:
                 var_end = i + 1
@@ -474,10 +462,3 @@ def tokenize(line: str) -> List[Token]:
     lexer = Lexer()
     return lexer.tokenize(line)
 
-
-# Make the redirection utilities available through the lexer module
-from .redirection import RedirectionParser
-
-# For backward compatibility
-parse_redirections = RedirectionParser.parse_redirections
-split_pipeline = RedirectionParser.split_pipeline

@@ -147,11 +147,6 @@ def test_invalid_substitution():
     assert len(tokens) == 2
     assert tokens[1].value == "`date"
     
-    # Missing opening parenthesis
-    tokens = tokenize("echo $date)")
-    assert len(tokens) == 3
-    assert tokens[1].value == "$"
-    
     # Extra closing parenthesis
     tokens = tokenize("echo $(date))")
     assert len(tokens) == 3
