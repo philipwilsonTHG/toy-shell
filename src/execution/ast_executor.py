@@ -453,13 +453,6 @@ class ASTExecutor(ASTVisitor):
         """
         result = 0
         
-        # Debug output
-        if self.debug_mode:
-            print("[DEBUG] Executing AND-OR list:", file=sys.stderr)
-            for i, (cmd, op) in enumerate(node.commands_with_operators):
-                op_str = f" {op} " if op else ""
-                print(f"  {i}: {cmd}{op_str}", file=sys.stderr)
-        
         # Execute commands with short-circuit evaluation
         for command_node, operator in node.commands_with_operators:
             # Execute the current command
@@ -469,18 +462,12 @@ class ASTExecutor(ASTVisitor):
             # Handle short-circuit logic based on the operator
             if operator == '&&' and result != 0:
                 # AND operation: if the left command fails, short-circuit and skip the rest
-                if self.debug_mode:
-                    print(f"[DEBUG] Short-circuit AND: Command failed with status {result}", file=sys.stderr)
                 break
             elif operator == '||' and result == 0:
                 # OR operation: if the left command succeeds, short-circuit and skip the rest
-                if self.debug_mode:
-                    print(f"[DEBUG] Short-circuit OR: Command succeeded with status {result}", file=sys.stderr)
                 break
         
         return result
-    
-    # The expand_word method has been moved to WordExpander class
     
     def pattern_match(self, word: str, pattern: str) -> bool:
         """Match a word against a shell pattern
