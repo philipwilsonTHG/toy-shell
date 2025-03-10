@@ -2,7 +2,6 @@
 
 import os
 import sys
-import signal
 import re
 from typing import Optional, List
 
