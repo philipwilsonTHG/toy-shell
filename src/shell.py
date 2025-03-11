@@ -41,6 +41,9 @@ class Shell:
             debug_mode=debug_mode
         )
         
+        # Register this shell instance with the global context
+        SHELL.set_current_shell(self)
+        
         if self.interactive:
             # Set up job control
             TerminalController.setup_job_control()

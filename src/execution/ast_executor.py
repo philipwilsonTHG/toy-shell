@@ -105,15 +105,35 @@ class ASTExecutor(ASTVisitor):
         if isinstance(node, CommandNode) and node.command == '{':
             if self.debug_mode:
                 print("[DEBUG] Detected function body - special handling", file=sys.stderr)
-            # Extract the commands from within the braces and execute them one by one
-            body_commands = node.args[1:-1] if len(node.args) > 2 else []
-            for cmd in body_commands:
-                if cmd != '{' and cmd != '}' and not cmd.startswith('"') and not cmd.startswith("'"):
-                    # Execute each command in the body
-                    # But skip the opening/closing braces and quotes
+            
+            # Extract the commands from within the braces
+            # Skip the opening '{' at the beginning and closing '}' at the end
+            start_idx = 1 if node.args and node.args[0] == '{' else 0
+            end_idx = -1 if node.args and node.args[-1] == '}' else len(node.args)
+            
+            # Reconstruct the full command string properly
+            command_string = ""
+            i = start_idx
+            while i < end_idx and i < len(node.args):
+                # Handle the special case of 'echo' followed by a quoted string
+                if i + 1 < end_idx and node.args[i] == 'echo' and (
+                    (node.args[i+1].startswith("'") and node.args[i+1].endswith("'")) or
+                    (node.args[i+1].startswith('"') and node.args[i+1].endswith('"'))
+                ):
+                    command_string = f"echo {node.args[i+1]}"
                     if self.debug_mode:
-                        print(f"[DEBUG] Executing function body command: {cmd}", file=sys.stderr)
-                    self.execute_line(cmd)
+                        print(f"[DEBUG] Executing reconstructed command: {command_string}", file=sys.stderr)
+                    self.execute_line(command_string)
+                    i += 2  # Skip both echo and its argument
+                else:
+                    # If it's a command and not a brace
+                    if node.args[i] not in ['{', '}'] and node.args[i]:
+                        command_string = node.args[i]
+                        if self.debug_mode:
+                            print(f"[DEBUG] Executing command: {command_string}", file=sys.stderr)
+                        self.execute_line(command_string)
+                    i += 1
+                    
             return 0
             
         result = node.accept(self)
@@ -146,6 +166,13 @@ class ASTExecutor(ASTVisitor):
     def visit_command(self, node: CommandNode) -> int:
         """Execute a simple command"""
         if not node.command:
+            return 0
+            
+        # Special handling for 'function' keyword when it appears as a command
+        # to prevent recursion when executing function definitions
+        if node.command == 'function':
+            if self.debug_mode:
+                print(f"[DEBUG] Ignoring 'function' as standalone command - likely part of function definition", file=sys.stderr)
             return 0
             
         # Check if this is a function call
@@ -211,7 +238,7 @@ class ASTExecutor(ASTVisitor):
                 self.current_scope.set(var_name, expanded_value)
                 return 0
             
-        # Handle builtin command 'test' or '['
+        # Handle special commands: 'test', '[', or '}'
         if node.command in ['test', '[']:
             try:
                 return self.handle_test_command(node.args)
@@ -219,6 +246,14 @@ class ASTExecutor(ASTVisitor):
                 # Print error to stderr
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
+        
+        # Special handling for standalone brace tokens and parentheses
+        # When we see these as commands, they're likely part of a function definition
+        # and should not be executed as commands
+        if node.command in ['{', '}', '(', ')']:
+            if self.debug_mode:
+                print(f"[DEBUG] Ignoring standalone token '{node.command}' - likely function related", file=sys.stderr)
+            return 0
         
         # Regular command execution using pipeline executor
         # Process the command, arguments, and redirections to get tokens
@@ -434,6 +469,10 @@ class ASTExecutor(ASTVisitor):
     
     def visit_function(self, node: FunctionNode) -> int:
         """Define a function"""
+        if self.debug_mode:
+            print(f"[DEBUG] Registering function: {node.name}", file=sys.stderr)
+            print(f"[DEBUG] Function body type: {type(node.body)}", file=sys.stderr)
+            
         self.function_registry.register(node.name, node)
         return 0
         

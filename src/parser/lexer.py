@@ -93,7 +93,21 @@ class Lexer:
                 
             # Handle closing brace (if not part of a brace expansion pattern)
             if char == '}' and not self.in_quotes():
-                i = self.handle_operator(line, i)
+                # Check if this might be a function body closing brace
+                is_function_close = False
+                
+                # Look backward to see if this is after a semicolon or whitespace
+                # which would suggest it's a function closure
+                if (i > 0 and (line[i-1].isspace() or line[i-1] == ';')):
+                    is_function_close = True
+                
+                # If this is a function closing brace or standalone brace, treat as operator
+                if is_function_close:
+                    i = self.handle_operator(line, i)
+                else:
+                    # Otherwise, let the brace expansion handler deal with it
+                    self.buffer.append(char)
+                    i += 1
                 continue
                 
             # Handle operators
@@ -390,12 +404,32 @@ class Lexer:
     
     def handle_brace_expansion(self, line: str, i: int) -> int:
         """
-        Handle brace expansion patterns like {a,b,c} or {1..5}
+        Handle brace expansion patterns like {a,b,c} or {1..5}.
         
-        This function attempts to capture the entire brace expansion pattern as a single token,
-        including nested braces and multiple patterns (e.g., file{1..3}.{txt,log}).
+        Also handles braces in function definitions like "function name() { ... }"
+        taking into account their special role when determining brace balance.
         """
-        # We'll collect the entire token, which may include multiple brace patterns
+        # Check if this is likely a function definition opening brace
+        is_function_brace = False
+        if i > 0:
+            # Look backward to see if this follows a function pattern
+            # like "function name() {" or "name() {"
+            before_brace = line[:i].strip()
+            if before_brace.endswith(')') or before_brace.endswith('function'):
+                is_function_brace = True
+        
+        # If this looks like a function opening brace, treat it as a separate operator token
+        if is_function_brace:
+            # Finish current token if any
+            if self.buffer:
+                self.tokens.append(create_word_token(''.join(self.buffer)))
+                self.buffer = []
+                
+            # Add the opening brace as an operator token
+            self.tokens.append(create_operator_token('{'))
+            return i + 1
+        
+        # Otherwise handle as normal brace expansion pattern
         start_index = i
         
         # Process the token until we hit a terminating character (space, operator, etc.)
@@ -430,10 +464,11 @@ class Lexer:
             self.buffer.append(char)
             i += 1
         
-        # If we have unbalanced braces, that's a syntax error, but we'll still
-        # tokenize what we have and let the parser handle the error
-        if brace_level != 0:
-            print(f"Warning: Unbalanced braces in pattern: {''.join(self.buffer)}", file=sys.stderr)
+        # If we have unbalanced braces in a pattern, warn but continue
+        if brace_level != 0 and not is_function_brace:
+            pattern = ''.join(self.buffer)
+            if ',' in pattern:  # Only warn for actual brace expansion patterns
+                print(f"Warning: Unbalanced braces in pattern: {pattern}", file=sys.stderr)
             
         # Create a token for the entire pattern
         if self.buffer:

@@ -118,7 +118,7 @@ class FunctionDefinitionRule(GrammarRule):
         Returns:
             A Node representing the compound statement, or None if parsing failed
         """
-        # Check and consume the opening brace
+        # Check and consume the opening brace - return early if missing
         if not stream.match_operator('{'):
             return None
             
@@ -126,34 +126,57 @@ class FunctionDefinitionRule(GrammarRule):
         commands = []
         command_rule = CommandRule()
         
+        # Initialize a brace counter to handle nested braces
+        brace_depth = 1  # We've already consumed one opening brace
+        
         while not stream.is_at_end():
-            # Check if we've reached the closing brace
-            if stream.match_operator('}'):
-                break
-                
+            # Check if we've reached the closing brace at the correct nesting level
+            if stream.peek().token_type == TokenType.OPERATOR:
+                if stream.peek().value == '{':
+                    # Found another opening brace - increment depth counter
+                    brace_depth += 1
+                    # Don't consume it, let the command parser handle it
+                elif stream.peek().value == '}':
+                    # Found closing brace - decrement depth counter
+                    brace_depth -= 1
+                    
+                    # If we've found the matching closing brace for our function body
+                    if brace_depth == 0:
+                        # Consume the closing brace and break out of the loop
+                        stream.consume()
+                        break
+            
             # Parse the next command
             command = command_rule.parse(stream, context)
             if command is not None:
                 commands.append(command)
             else:
-                # If we can't parse a command, skip to the next statement
-                if stream.match_operator('}'):
-                    break
-                else:
+                # If we can't parse a command but haven't reached the end, consume one token
+                # to avoid an infinite loop, but be careful not to consume our closing brace
+                if not stream.is_at_end() and not (stream.peek().token_type == TokenType.OPERATOR and 
+                                                  stream.peek().value == '}' and brace_depth == 1):
                     stream.consume()
-                    
-        # Check if we've consumed the closing brace
-        if stream.is_at_end():
+                elif stream.peek().token_type == TokenType.OPERATOR and stream.peek().value == '}':
+                    # We found a closing brace we need, but let the brace counter handle it
+                    # in the next iteration, don't consume it here
+                    pass
+                else:
+                    # If we're at the end or have an unexpected token, just break
+                    break
+            
+        # Check if we've consumed all braces properly
+        if brace_depth > 0:
             context.report_error(
-                "Expected '}' to close function body",
+                f"Expected '{brace_depth}' more closing braces '}}' to complete function body",
                 stream.current_position(),
-                "Add '}' to close the function body"
+                "Add missing closing braces to complete the function body"
             )
             return None
             
-        # If no commands were parsed, create an empty body
+        # If no commands were parsed, create an empty command list so function still works
         if not commands:
-            return None
+            # Return an empty list node rather than None for empty function bodies
+            return ListNode([])
             
         # If there's only one command, return it directly
         if len(commands) == 1:

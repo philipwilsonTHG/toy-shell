@@ -47,6 +47,17 @@ class ShellContext:
         self.histfile = os.path.expanduser("~/.psh_history")
         self.histsize = 10000
         
+        # Reference to the current shell instance (set by the shell itself)
+        self._current_shell = None
+        
+    def set_current_shell(self, shell_instance):
+        """Set reference to the current shell instance"""
+        self._current_shell = shell_instance
+        
+    def get_current_shell(self):
+        """Get reference to the current shell instance"""
+        return self._current_shell
+        
     def setup_logging(self) -> logging.Logger:
         """Set up logging configuration"""
         logger = logging.getLogger('psh')
