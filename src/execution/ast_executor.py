@@ -146,17 +146,36 @@ class ASTExecutor(ASTVisitor):
         
     def execute_line(self, line: str) -> int:
         """Execute a single line of shell code"""
-        # Add a small helper method to parse and execute a line
-        from ..parser.lexer import tokenize
-        from ..parser.parser.shell_parser import ShellParser
-        
-        parser = ShellParser()
-        tokens = tokenize(line)
-        ast = parser.parse(tokens)
-        
-        if ast:
-            return self.execute(ast)
-        return 0
+        # Special protection against infinite recursion
+        # This can happen if the line is being broken up incorrectly
+        if hasattr(self, '_execution_depth'):
+            self._execution_depth += 1
+        else:
+            self._execution_depth = 1
+            
+        # Safety check - don't go too deep
+        if self._execution_depth > 20:
+            print(f"Error: maximum recursion depth exceeded for line: {line}", file=sys.stderr)
+            self._execution_depth -= 1
+            return 1
+            
+        try:
+            # Add a small helper method to parse and execute a line
+            from ..parser.lexer import tokenize
+            from ..parser.parser.shell_parser import ShellParser
+            
+            parser = ShellParser()
+            tokens = tokenize(line)
+            ast = parser.parse(tokens)
+            
+            result = 0
+            if ast:
+                result = self.execute(ast)
+                
+            return result
+        finally:
+            # Ensure we decrement the counter even if there's an exception
+            self._execution_depth -= 1
     
     def _print_ast(self, node: Node, indent: int = 0):
         """Print an AST node with indentation for debugging"""
@@ -175,10 +194,21 @@ class ASTExecutor(ASTVisitor):
                 print(f"[DEBUG] Ignoring 'function' as standalone command - likely part of function definition", file=sys.stderr)
             return 0
             
-        # Check if this is a function call
+        # Special handling for standalone brace tokens and parentheses
+        # When we see these as commands, they're likely part of a function definition
+        # and should not be executed as commands
+        if node.command in ['{', '}', '(', ')']:
+            if self.debug_mode:
+                print(f"[DEBUG] Ignoring standalone token '{node.command}' - likely function related", file=sys.stderr)
+            return 0
+            
+        # Check if this is a function call - IMPORTANT: we handle functions before attempting external commands
         if self.function_registry.exists(node.command):
             func_node = self.function_registry.get(node.command)
             
+            if self.debug_mode:
+                print(f"[DEBUG] Executing shell function: {node.command}", file=sys.stderr)
+                
             # Create new scope for function execution
             old_scope = self.current_scope
             self.current_scope = Scope(old_scope)
@@ -199,6 +229,7 @@ class ASTExecutor(ASTVisitor):
             # Restore previous scope
             self.current_scope = old_scope
             
+            # Return from function execution - IMPORTANT: don't fall through to native command execution
             return result
             
         # Special handling for variable assignments (VAR=value command)
@@ -238,7 +269,7 @@ class ASTExecutor(ASTVisitor):
                 self.current_scope.set(var_name, expanded_value)
                 return 0
             
-        # Handle special commands: 'test', '[', or '}'
+        # Handle special commands: 'test', '['
         if node.command in ['test', '[']:
             try:
                 return self.handle_test_command(node.args)
@@ -246,14 +277,6 @@ class ASTExecutor(ASTVisitor):
                 # Print error to stderr
                 print(f"Error: {e}", file=sys.stderr)
                 return 1
-        
-        # Special handling for standalone brace tokens and parentheses
-        # When we see these as commands, they're likely part of a function definition
-        # and should not be executed as commands
-        if node.command in ['{', '}', '(', ')']:
-            if self.debug_mode:
-                print(f"[DEBUG] Ignoring standalone token '{node.command}' - likely function related", file=sys.stderr)
-            return 0
         
         # Regular command execution using pipeline executor
         # Process the command, arguments, and redirections to get tokens
@@ -281,44 +304,104 @@ class ASTExecutor(ASTVisitor):
         
         # Handle command expansion
         fixed_command = self.word_expander.handle_escaped_dollars(command)
-        expanded_command = self.word_expander.expand(fixed_command)
         
-        # Handle brace expansion in the command itself
-        if ' ' in expanded_command:
-            # Split into multiple tokens - first one is the command, rest are args
-            words = expanded_command.split()
-            tokens.append(create_word_token(words[0]))
-            for word in words[1:]:
-                tokens.append(create_word_token(word))
+        # First check for brace expansion in the command
+        if '{' in fixed_command and not (fixed_command.startswith("'") and fixed_command.endswith("'")):
+            from ..parser.brace_expander import expand_braces
+            braces_expanded = expand_braces(fixed_command)
+            
+            if self.debug_mode:
+                print(f"[DEBUG] Command brace expansion: '{fixed_command}' → {braces_expanded}", file=sys.stderr)
+            
+            if len(braces_expanded) > 1:
+                # Process first expansion as command, rest as arguments
+                first_expansion = self.word_expander.expand(braces_expanded[0])
+                tokens.append(create_word_token(first_expansion))
+                
+                # Add remaining expansions as arguments
+                for brace_item in braces_expanded[1:]:
+                    var_expanded = self.word_expander.expand(brace_item)
+                    tokens.append(create_word_token(var_expanded))
+            else:
+                # Only one expansion, process normally
+                expanded_command = self.word_expander.expand(braces_expanded[0])
+                
+                # Handle any spaces from variable expansion
+                if ' ' in expanded_command:
+                    words = expanded_command.split()
+                    tokens.append(create_word_token(words[0]))
+                    for word in words[1:]:
+                        tokens.append(create_word_token(word))
+                else:
+                    tokens.append(create_word_token(expanded_command))
         else:
-            tokens.append(create_word_token(expanded_command))
+            # No brace expansion needed, just handle variable expansion
+            expanded_command = self.word_expander.expand(fixed_command)
+            
+            # Handle spaces from variable expansion
+            if ' ' in expanded_command:
+                # Split into multiple tokens - first one is the command, rest are args
+                words = expanded_command.split()
+                tokens.append(create_word_token(words[0]))
+                for word in words[1:]:
+                    tokens.append(create_word_token(word))
+            else:
+                tokens.append(create_word_token(expanded_command))
         
         # Handle arguments (skip the first one which is the command itself)
         for arg in args[1:]:
             # Check if we need to preserve spaces for quotes
             is_quoted_arg = (arg.startswith('"') and arg.endswith('"')) or (arg.startswith("'") and arg.endswith("'"))
+            is_single_quoted = arg.startswith("'") and arg.endswith("'")
             
             # First handle escaped dollar signs, converting \$ to $ prior to expansion
             fixed_arg = self.word_expander.handle_escaped_dollars(arg)
             
-            # Expand the argument
-            expanded_arg = self.word_expander.expand(fixed_arg)
-            
-            # For debugging
-            if self.debug_mode:
-                print(f"[DEBUG] Processing arg: '{arg}' => '{expanded_arg}' (quoted: {is_quoted_arg})", file=sys.stderr)
-            
-            # Handle brace expansion results - may contain spaces that need word splitting
-            if ' ' in expanded_arg and not is_quoted_arg:
-                # Split the expanded result into multiple tokens
-                for word in expanded_arg.split():
+            # Handle brace expansion first if applicable (and not in single quotes)
+            if '{' in fixed_arg and not is_single_quoted:
+                # Directly use expand_braces to get proper list expansion
+                from ..parser.brace_expander import expand_braces
+                braces_expanded = expand_braces(fixed_arg)
+                
+                if self.debug_mode:
+                    print(f"[DEBUG] Brace expansion: '{fixed_arg}' → {braces_expanded}", file=sys.stderr)
+                
+                # Process each expanded item
+                for brace_item in braces_expanded:
+                    # Do variable expansion on each brace-expanded item
+                    var_expanded = self.word_expander.expand(brace_item)
+                    
                     if self.debug_mode:
-                        print(f"[DEBUG] Word splitting: '{expanded_arg}' -> '{word}'", file=sys.stderr)
-                    tokens.append(create_word_token(word, quoted=False))
+                        print(f"[DEBUG] Variable expansion after brace: '{brace_item}' → '{var_expanded}'", file=sys.stderr)
+                    
+                    # Handle word splitting for each result if needed
+                    if ' ' in var_expanded and not is_quoted_arg:
+                        for word in var_expanded.split():
+                            if self.debug_mode:
+                                print(f"[DEBUG] Word splitting: '{var_expanded}' -> '{word}'", file=sys.stderr)
+                            tokens.append(create_word_token(word, quoted=False))
+                    else:
+                        token = create_word_token(var_expanded, quoted=is_quoted_arg)
+                        tokens.append(token)
             else:
-                # Create a special token attribute to mark quoted arguments
-                token = create_word_token(expanded_arg, quoted=is_quoted_arg)
-                tokens.append(token)
+                # No braces or in single quotes, just do normal expansion
+                expanded_arg = self.word_expander.expand(fixed_arg)
+                
+                # For debugging
+                if self.debug_mode:
+                    print(f"[DEBUG] Processing arg: '{arg}' => '{expanded_arg}' (quoted: {is_quoted_arg})", file=sys.stderr)
+                
+                # Handle potential spaces that need word splitting
+                if ' ' in expanded_arg and not is_quoted_arg:
+                    # Split the expanded result into multiple tokens
+                    for word in expanded_arg.split():
+                        if self.debug_mode:
+                            print(f"[DEBUG] Word splitting: '{expanded_arg}' -> '{word}'", file=sys.stderr)
+                        tokens.append(create_word_token(word, quoted=False))
+                else:
+                    # Create a special token attribute to mark quoted arguments
+                    token = create_word_token(expanded_arg, quoted=is_quoted_arg)
+                    tokens.append(token)
         
         # Handle redirections
         for redir_op, redir_target in redirections:

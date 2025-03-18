@@ -44,7 +44,16 @@ class StateMachineWordExpander:
         """
         # First check if this is a single-quoted string (for compatibility with original)
         if word.startswith("'") and word.endswith("'"):
+            if self.debug_mode:
+                print(f"[DEBUG] Not expanding single-quoted string: '{word}'", file=sys.stderr)
             return word
+            
+        # Special check for brace patterns
+        # Note: we don't expand braces here directly; brace expansion should be
+        # handled before calling this method, as it produces multiple results
+        if '{' in word and '}' in word and not word.startswith("'"):
+            if self.debug_mode:
+                print(f"[DEBUG] Word contains brace pattern: '{word}' - brace expansion should be handled separately", file=sys.stderr)
         
         # Special handling for positional parameters (e.g., $1, $2)
         # This is needed to ensure they are properly expanded even within strings
@@ -77,7 +86,11 @@ class StateMachineWordExpander:
             
             return expanded
             
-        return self.expander.expand(word)
+        expanded_result = self.expander.expand(word)
+        if self.debug_mode and word != expanded_result:
+            print(f"[DEBUG] Variable expansion: '{word}' → '{expanded_result}'", file=sys.stderr)
+            
+        return expanded_result
     
     def _expand_variables(self, text: str) -> str:
         """

@@ -41,6 +41,10 @@ class Shell:
             debug_mode=debug_mode
         )
         
+        # Initialize AST executor early to make function registry available
+        from .execution.ast_executor import ASTExecutor
+        self.ast_executor = ASTExecutor(self.interactive, self.debug_mode)
+        
         # Register this shell instance with the global context
         SHELL.set_current_shell(self)
         
@@ -66,8 +70,17 @@ class Shell:
             if not line or line.startswith('#'):
                 return 0
             
+            # Special handling for function definitions
+            # Don't split function definitions on semicolons
+            stripped_line = line.lstrip()
+            if stripped_line.startswith('function ') and '{' in line and '}' in line:
+                # Let the parser handle the entire function definition
+                if self.debug_mode:
+                    print(f"[DEBUG] Detected function definition, passing to parser as single unit", file=sys.stderr)
+                # Pass the entire function declaration to the parser
+                pass
             # Special handling for commands separated by semicolons
-            if ';' in line:
+            elif ';' in line:
                 # Check if the line starts with a shell keyword or contains control structure keywords
                 # Skip semicolon splitting for control structures
                 shell_keywords = ['if', 'while', 'until', 'for', 'case']
@@ -75,7 +88,6 @@ class Shell:
                 has_control_structure = False
                 
                 # Check if the line starts with a keyword
-                stripped_line = line.lstrip()
                 for keyword in shell_keywords:
                     if stripped_line.startswith(keyword + ' ') or stripped_line == keyword:
                         has_control_structure = True
@@ -99,20 +111,30 @@ class Shell:
                     # Simple semicolon handling without accounting for quotes
                     from .parser.quotes import handle_quotes
                     
-                    # Preserve quotes when splitting on semicolons
+                    # Preserve quotes and braces when splitting on semicolons
                     commands = []
                     current_cmd = []
                     in_single_quote = False
                     in_double_quote = False
+                    brace_depth = 0  # Track nested braces
                     
                     for char in line:
+                        # Handle quotes
                         if char == "'" and not in_double_quote:
                             in_single_quote = not in_single_quote
                             current_cmd.append(char)
                         elif char == '"' and not in_single_quote:
                             in_double_quote = not in_double_quote
                             current_cmd.append(char)
-                        elif char == ';' and not (in_single_quote or in_double_quote):
+                        # Handle braces
+                        elif char == '{' and not (in_single_quote or in_double_quote):
+                            brace_depth += 1
+                            current_cmd.append(char)
+                        elif char == '}' and not (in_single_quote or in_double_quote):
+                            brace_depth -= 1
+                            current_cmd.append(char)
+                        # Handle semicolons
+                        elif char == ';' and not (in_single_quote or in_double_quote) and brace_depth == 0:
                             if current_cmd:
                                 commands.append(''.join(current_cmd).strip())
                                 current_cmd = []
@@ -168,10 +190,7 @@ class Shell:
                 history(*args)
                 return 0
             
-            # Initialize AST executor if not already done
-            if not hasattr(self, 'ast_executor'):
-                from .execution.ast_executor import ASTExecutor
-                self.ast_executor = ASTExecutor(self.interactive, self.debug_mode)
+            # AST executor is already initialized during __init__
             
             # Pre-process escaped variables for better compatibility
             # Handle '\$VAR' format (common in scripts) by replacing with '$VAR'

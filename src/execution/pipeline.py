@@ -8,7 +8,7 @@ from typing import List, Tuple, Dict, Optional
 
 from ..parser.token_types import Token, TokenType, create_word_token
 from ..parser.redirection import RedirectionParser
-from ..parser.expander_facade import expand_all, expand_command_substitution
+from ..parser.expander_facade import expand_all, expand_command_substitution, expand_braces
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController
 from ..builtins import BUILTINS
@@ -17,8 +17,13 @@ from ..builtins import BUILTINS
 class TokenExpander:
     """Handles expansion of tokens (variables, wildcards, etc.)"""
     
-    @staticmethod
-    def expand_token(token: Token) -> List[str]:
+    def __init__(self):
+        # Initialize the word expander for variable expansion
+        from ..parser.state_machine_adapter import StateMachineWordExpander
+        self.word_expander = StateMachineWordExpander(os.environ.get, 
+                                                     os.environ.get('DEBUG_SHELL') is not None)
+    
+    def expand_token(self, token: Token) -> List[str]:
         """Expand a single token into a list of strings"""
         expanded_tokens = []
         
@@ -32,38 +37,72 @@ class TokenExpander:
             is_double_quoted = token.value.startswith('"') and token.value.endswith('"')
             is_single_quoted = token.value.startswith("'") and token.value.endswith("'")
             
-            # Handle other expansions including variables
-            expanded = expand_all(token.value)
-            
-            # For debugging
-            if os.environ.get('DEBUG_EXPANSION'):
-                print(f"[EXP] Token: '{token.value}' → '{expanded}' (dq: {is_double_quoted}, sq: {is_single_quoted})", 
-                      file=sys.stderr)
-            
-            # Handle wildcards (but not for quoted strings)
-            if not (is_double_quoted or is_single_quoted) and ('*' in expanded or '?' in expanded):
-                import glob
-                matches = glob.glob(expanded)
-                if matches:
-                    expanded_tokens.extend(sorted(matches))
-                else:
-                    expanded_tokens.append(expanded)
+            # Handle brace expansion first if not in single quotes
+            if '{' in token.value and not is_single_quoted:
+                # Directly use expand_braces to get the list of expansions
+                braces_expanded = expand_braces(token.value)
+                
+                # For debugging
+                if os.environ.get('DEBUG_EXPANSION') or os.environ.get('DEBUG_SHELL'):
+                    print(f"[EXP] Brace expansion: '{token.value}' → {braces_expanded}", 
+                          file=sys.stderr)
+                
+                # For each brace expansion result, also do variable expansion
+                for brace_item in braces_expanded:
+                    # Now run other expansion steps, including variables
+                    var_expanded = self.word_expander.expand(brace_item) if hasattr(self, 'word_expander') else expand_all(brace_item)
+                    
+                    # For debugging
+                    if os.environ.get('DEBUG_EXPANSION') or os.environ.get('DEBUG_SHELL'):
+                        print(f"[EXP] Variable expansion: '{brace_item}' → '{var_expanded}'", 
+                              file=sys.stderr)
+                    
+                    # Handle wildcards (but not for quoted strings)
+                    if '*' in var_expanded or '?' in var_expanded:
+                        import glob
+                        matches = glob.glob(var_expanded)
+                        if matches:
+                            expanded_tokens.extend(sorted(matches))
+                        else:
+                            expanded_tokens.append(var_expanded)
+                    else:
+                        # Check for word splitting
+                        if ' ' in var_expanded and not is_double_quoted:
+                            expanded_tokens.extend(var_expanded.split())
+                        else:
+                            expanded_tokens.append(var_expanded)
             else:
-                # For quoted strings, preserve the entire string as one token
-                # even if it contains spaces
-                if (is_double_quoted or is_single_quoted):
-                    expanded_tokens.append(expanded)
-                else:
-                    # For non-quoted strings, handle variable expansion and word splitting
-                    if ' ' in expanded:
-                        expanded_tokens.extend(expanded.split())
+                # Handle other expansions including variables
+                expanded = expand_all(token.value)
+                
+                # For debugging
+                if os.environ.get('DEBUG_EXPANSION'):
+                    print(f"[EXP] Token: '{token.value}' → '{expanded}' (dq: {is_double_quoted}, sq: {is_single_quoted})", 
+                          file=sys.stderr)
+                
+                # Handle wildcards (but not for quoted strings)
+                if not (is_double_quoted or is_single_quoted) and ('*' in expanded or '?' in expanded):
+                    import glob
+                    matches = glob.glob(expanded)
+                    if matches:
+                        expanded_tokens.extend(sorted(matches))
                     else:
                         expanded_tokens.append(expanded)
+                else:
+                    # For quoted strings, preserve the entire string as one token
+                    # even if it contains spaces
+                    if (is_double_quoted or is_single_quoted):
+                        expanded_tokens.append(expanded)
+                    else:
+                        # For non-quoted strings, handle variable expansion and word splitting
+                        if ' ' in expanded:
+                            expanded_tokens.extend(expanded.split())
+                        else:
+                            expanded_tokens.append(expanded)
                 
         return expanded_tokens
     
-    @staticmethod
-    def expand_tokens(tokens: List[Token]) -> List[str]:
+    def expand_tokens(self, tokens: List[Token]) -> List[str]:
         """Expand multiple tokens into a list of strings"""
         expanded_tokens = []
         
@@ -78,7 +117,7 @@ class TokenExpander:
                 expanded_tokens.append(strip_quotes(token.value))
             else:
                 # For normal tokens, use standard expansion which may split on spaces
-                expanded_tokens.extend(TokenExpander.expand_token(token))
+                expanded_tokens.extend(self.expand_token(token))
                 
         return expanded_tokens
 
@@ -158,7 +197,7 @@ class PipelineExecutor:
     
     def __init__(self, interactive: bool = True):
         self.interactive = interactive
-        self.token_expander = TokenExpander()
+        self.token_expander = TokenExpander()  # Now instantiates with its own word_expander
         self.redirection_handler = RedirectionHandler()
     
     def create_pipes(self, num_segments: int) -> List[Tuple[int, int]]:
@@ -188,6 +227,16 @@ class PipelineExecutor:
         try:
             # Apply redirections
             self.redirection_handler.apply_redirections(redirections)
+            
+            # Check for shell functions before attempting to execute
+            from ..shell import SHELL
+            if hasattr(SHELL, '_current_shell') and SHELL._current_shell:
+                shell_instance = SHELL._current_shell
+                if hasattr(shell_instance, 'ast_executor') and \
+                    shell_instance.ast_executor.function_registry.exists(cmd):
+                    # This is a shell function - don't try to execute it as an external program
+                    print(f"Error: '{cmd}' is a shell function but was attempted to execute as a binary", file=sys.stderr)
+                    os._exit(127)  # Command not found exit code
             
             # Process arguments - make sure we don't split quoted arguments with spaces
             processed_args = []
@@ -308,8 +357,20 @@ class PipelineExecutor:
                 os.environ[var_name] = var_value
                 return 0  # Return success for variable assignment
             
-            # Check for builtin (but only for simple commands, not in pipelines)
+            # Check for builtins and functions
             if i == 0 and len(segments) == 1:
+                # Check if the command is a shell function
+                from ..shell import SHELL
+                if hasattr(SHELL, '_current_shell') and SHELL._current_shell:
+                    shell_instance = SHELL._current_shell
+                    if hasattr(shell_instance, 'ast_executor') and \
+                       shell_instance.ast_executor.function_registry.exists(cmd):
+                        # This is a function call - use the AST executor to handle it properly
+                        from ..parser.ast import CommandNode
+                        cmd_node = CommandNode(cmd, args)
+                        return shell_instance.ast_executor.visit_command(cmd_node)
+                
+                # Check for builtin commands
                 result = self.handle_builtin(cmd, args)
                 if result is not None:
                     return result

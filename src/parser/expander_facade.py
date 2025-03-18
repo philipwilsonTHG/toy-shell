@@ -110,6 +110,9 @@ def expand_all(text: str) -> str:
         # If we have multiple results from brace expansion,
         # process each one separately through the remaining expansion steps
         if len(expanded_parts) > 1:
+            # We're returning a space-joined string for now for compatibility with existing code
+            # The fix for proper brace expansion will be in the AST executor and TokenExpander
+            # where we need to call expand_braces directly instead of using expand_all
             return ' '.join(expand_all(part) for part in expanded_parts)
         # Otherwise, continue with the single result
         text = expanded_parts[0]
