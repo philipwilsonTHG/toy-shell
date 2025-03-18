@@ -87,6 +87,11 @@ class HistoryManager:
         end = min(length + 1, start + count)
         
         return [readline.get_history_item(i) for i in range(start, end)]
+        
+    @staticmethod
+    def get_next_index() -> int:
+        """Get the next history index"""
+        return readline.get_current_history_length() + 1
     
     @staticmethod
     def clear_history():

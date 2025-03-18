@@ -130,10 +130,12 @@ class ShellContext:
     
     def get_prompt(self) -> str:
         """Generate shell prompt based on configuration"""
-        home = os.path.expanduser("~")
-        cwd = os.getcwd().replace(home, "~")
+        # Use the ConfigManager to get a formatted prompt
+        from .config.manager import ConfigManager
         
-        return f"{os.getlogin()}@{os.uname().nodename}:{cwd}$ "
+        # Use the ConfigManager's prompt generator
+        config_manager = ConfigManager()
+        return config_manager.generate_prompt()
 
 
 # Global shell context instance

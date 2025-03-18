@@ -12,7 +12,7 @@ class ConfigManager:
         'histsize': 10000,
         'histfile': '~/.psh_history',
         'debug': False,
-        'prompt_template': '{user}@{host}:{cwd}$ '
+        'prompt_template': '\\[blue]\\u@\\h\\[reset]:\\[cyan]\\w\\[reset] \\[green]\\g\\[reset]\\$ '
     }
     
     def __init__(self):
@@ -72,12 +72,22 @@ class ConfigManager:
     
     def generate_prompt(self) -> str:
         """Generate the shell prompt based on configuration"""
-        template = self.config['prompt_template']
-        home = os.path.expanduser("~")
-        cwd = os.getcwd().replace(home, "~")
+        from ..utils.prompt import PromptFormatter
         
-        return template.format(
-            user=os.getlogin(),
-            host=os.uname().nodename,
-            cwd=cwd
-        )
+        template = self.config.get('prompt_template')
+        formatter = PromptFormatter()
+        
+        # Handle old format templates for backwards compatibility
+        if '{' in template and '}' in template:
+            # Legacy format string style prompt
+            home = os.path.expanduser("~")
+            cwd = os.getcwd().replace(home, "~")
+            
+            return template.format(
+                user=os.getlogin(),
+                host=os.uname().nodename,
+                cwd=cwd
+            )
+        
+        # Use the new prompt formatter
+        return formatter.format(template)

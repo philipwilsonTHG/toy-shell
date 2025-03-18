@@ -35,6 +35,10 @@ class Shell:
         # Track last command's exit status
         self.last_exit_status = 0
         
+        # Initialize prompt formatter
+        from .utils.prompt import PromptFormatter
+        self.prompt_formatter = PromptFormatter()
+        
         # Initialize word expander for faster variable expansion
         self.word_expander = StateMachineWordExpander(
             scope_provider=lambda name: os.environ.get(name),
@@ -69,6 +73,10 @@ class Shell:
             line = line.strip()
             if not line or line.startswith('#'):
                 return 0
+                
+            # Reset prompt formatter with latest exit status
+            if hasattr(self, 'last_exit_status'):
+                self.prompt_formatter.set_exit_status(self.last_exit_status)
             
             # Special handling for function definitions
             # Don't split function definitions on semicolons
@@ -294,6 +302,9 @@ class Shell:
                 # Store the exit status for $? variable
                 if result is not None:
                     self.last_exit_status = result
+                    
+                    # Update prompt formatter with new exit status
+                    self.prompt_formatter.set_exit_status(self.last_exit_status)
                     
                     # Set $? environment variable
                     os.environ["?"] = str(self.last_exit_status)
