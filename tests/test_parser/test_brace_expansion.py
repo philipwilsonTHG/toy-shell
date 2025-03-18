@@ -30,6 +30,20 @@ class TestBraceExpansion:
         assert expand_braces("{1..5}") == ["1", "2", "3", "4", "5"]
         assert expand_braces("{5..1}") == ["5", "4", "3", "2", "1"]
         assert expand_braces("file{1..3}.txt") == ["file1.txt", "file2.txt", "file3.txt"]
+        
+    def test_range_with_step(self):
+        """Test range expansion with step/increment."""
+        # Numeric ranges with step
+        assert expand_braces("{1..10..2}") == ["1", "3", "5", "7", "9"]
+        assert expand_braces("{10..1..2}") == ["10", "8", "6", "4", "2"]
+        assert expand_braces("{1..10..3}") == ["1", "4", "7", "10"]
+        
+        # Alphabetic ranges with step
+        assert expand_braces("{a..m..3}") == ["a", "d", "g", "j", "m"]
+        assert expand_braces("{Z..A..5}") == ["Z", "U", "P", "K", "F", "A"]
+        
+        # Ranges with prefixes and suffixes
+        assert expand_braces("file{1..7..2}.txt") == ["file1.txt", "file3.txt", "file5.txt", "file7.txt"]
     
     def test_alphabetic_range_expansion(self):
         """Test alphabetic range expansion."""
@@ -58,10 +72,16 @@ class TestBraceExpansion:
             "img2.png", "img2.jpg"
         ]
     
-    def test_no_expansion_in_quotes(self):
-        """Test that braces are not expanded in quotes."""
+    def test_quotes_handling(self):
+        """Test brace expansion quote handling according to POSIX rules."""
+        # Single quotes prevent brace expansion
         assert expand_braces("'{a,b,c}'") == ["'{a,b,c}'"]
-        assert expand_braces('"{a,b,c}"') == ['"{a,b,c}"']
+        
+        # Double quotes should still allow brace expansion
+        assert expand_braces('"{a,b,c}"') == ['"a"', '"b"', '"c"']
+        
+        # Mixed quotes
+        assert expand_braces("'single'{a,b}'quote'") == ["'single'a'quote'", "'single'b'quote'"]
     
     def test_escaped_braces(self):
         """Test that escaped braces don't expand."""
@@ -84,6 +104,18 @@ class TestBraceExpansion:
     def test_with_spaces(self):
         """Test that spaces around commas are preserved in the result."""
         assert expand_braces("{ a , b , c }") == [" a ", " b ", " c "]
+        
+    def test_variable_expansion_interaction(self):
+        """Test how brace expansion interacts with variable expansion."""
+        # This test requires manual setup since expand_braces doesn't 
+        # handle variable expansion directly - it's part of the shell's
+        # expansion pipeline.
+        
+        # In the shell, brace expansion happens before variable expansion,
+        # so variables passed directly to expand_braces won't be expanded.
+        # This is handled properly in the integration tests.
+        assert expand_braces("{$A,$B}") == ["$A", "$B"]
+        assert expand_braces("prefix{$A,$B}suffix") == ["prefix$Asuffix", "prefix$Bsuffix"]
 
 
 if __name__ == "__main__":

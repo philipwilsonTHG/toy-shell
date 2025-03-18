@@ -97,9 +97,28 @@ def expand_all(text: str) -> str:
     Returns:
         The fully expanded text
     """
-    # Implement tilde expansion first if needed
+    # POSIX expansion order:
+    # 1. Brace expansion
+    # 2. Tilde expansion
+    # 3. Parameter expansion, command substitution, arithmetic expansion
+    # 4. Word splitting
+    # 5. Pathname expansion
+    
+    # First perform brace expansion (unless in single quotes)
+    if '{' in text:
+        expanded_parts = expand_braces(text)
+        # If we have multiple results from brace expansion,
+        # process each one separately through the remaining expansion steps
+        if len(expanded_parts) > 1:
+            return ' '.join(expand_all(part) for part in expanded_parts)
+        # Otherwise, continue with the single result
+        text = expanded_parts[0]
+    
+    # Then tilde expansion
     if text.startswith('~'):
         text = expand_tilde(text)
+        
+    # Then all other expansions via state machine expander
     return _env_expander.expand(text)
 
 def expand_command_substitution(text: str) -> str:

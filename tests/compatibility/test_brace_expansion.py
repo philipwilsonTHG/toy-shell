@@ -39,6 +39,20 @@ class TestBraceExpansion:
         echo {1..5}
         """)
         
+    def test_range_with_step(self):
+        """Test range expansion with step/increment."""
+        self.tester.assert_outputs_match("""
+        echo {1..10..2}
+        """)
+        
+        self.tester.assert_outputs_match("""
+        echo {10..1..2}
+        """)
+        
+        self.tester.assert_outputs_match("""
+        echo {a..m..3}
+        """)
+        
     def test_reverse_numeric_range(self):
         """Test reverse numeric range expansion."""
         self.tester.assert_outputs_match("""

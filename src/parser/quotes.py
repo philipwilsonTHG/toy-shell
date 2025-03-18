@@ -97,6 +97,46 @@ def is_quoted(text: str) -> bool:
     
     return ((text[0] == '"' and text[-1] == '"') or 
             (text[0] == "'" and text[-1] == "'"))
+            
+def is_in_single_quotes(text: str, pos: int) -> bool:
+    """
+    Check if a position in text is within single quotes.
+    This is used for determining whether brace expansion should occur.
+    
+    Args:
+        text: The text to check
+        pos: The position to check
+        
+    Returns:
+        True if position is within single quotes, False otherwise
+    """
+    if pos >= len(text):
+        return False
+        
+    # Count single quotes before this position
+    # If odd number, we're inside single quotes
+    in_single_quote = False
+    in_double_quote = False
+    escaped = False
+    
+    for i in range(pos):
+        char = text[i]
+        
+        if escaped:
+            escaped = False
+            continue
+        
+        if char == '\\':
+            escaped = True
+            continue
+        
+        if char == "'" and not in_double_quote:
+            in_single_quote = not in_single_quote
+        
+        if char == '"' and not in_single_quote:
+            in_double_quote = not in_double_quote
+    
+    return in_single_quote
 
 def strip_quotes(text: str) -> str:
     """Remove surrounding quotes if present"""

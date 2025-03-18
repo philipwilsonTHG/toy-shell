@@ -6,7 +6,7 @@ this functionality independent of the state machine expander.
 """
 
 import re
-from .quotes import is_quoted
+from .quotes import is_in_single_quotes
 
 
 def expand_braces(text: str) -> list:
@@ -14,9 +14,14 @@ def expand_braces(text: str) -> list:
     
     Handles patterns like {a,b,c} and ranges like {1..5} or {a..z}.
     Returns a list of expanded strings.
+    
+    According to POSIX:
+    - Brace expansion is performed before any other expansions
+    - Brace expansion is not performed on text in single quotes
+    - Brace expansion can still occur within double quotes
     """
     # If no braces or escaped braces, return original text
-    if '{' not in text or '\\{' in text or is_quoted(text):
+    if '{' not in text or '\\{' in text:
         return [text]
     
     # Special cases
@@ -36,6 +41,18 @@ def expand_braces(text: str) -> list:
     middle_suffix = match.group(4)  # Content after this brace but before any other braces
     remainder = match.group(5)      # Any remaining text that might contain more braces
     
+    # Check if the opening brace is inside single quotes
+    brace_start = len(prefix)
+    if is_in_single_quotes(text, brace_start):
+        # If brace is inside single quotes, don't expand it
+        # But we still need to check for other braces in the remainder
+        if '{' in remainder:
+            result = []
+            for expanded_remainder in expand_braces(remainder):
+                result.append(f"{prefix}{brace_pattern}{middle_suffix}{expanded_remainder}")
+            return result
+        return [text]
+    
     # Full suffix is everything after the current brace pattern
     suffix = middle_suffix + remainder
     
@@ -51,22 +68,48 @@ def expand_braces(text: str) -> list:
     
     expanded = []
     
-    # Check if it's a range pattern like {1..5} or {a..z}
-    range_match = re.match(r'([^.]+)\.\.([^.]+)', brace_content)
+    # Check if it's a range pattern like {1..5} or {1..5..2} or {a..z}
+    # Match with optional step
+    range_match = re.match(r'([^.]+)\.\.([^.]+)(?:\.\.([^.]+))?', brace_content)
     if range_match and ',' not in brace_content:
-        start, end = range_match.groups()
+        # Extract start, end, and optional step
+        if len(range_match.groups()) == 3:
+            start, end, step_str = range_match.groups()
+        else:
+            start, end = range_match.groups()
+            step_str = None
         
         # Numeric range
         if start.isdigit() and end.isdigit():
             start_val, end_val = int(start), int(end)
-            step = 1 if start_val <= end_val else -1
-            items = [str(i) for i in range(start_val, end_val + step, step)]
+            
+            # Parse step if present, otherwise use default step
+            if step_str and step_str.isdigit() and int(step_str) > 0:
+                step = int(step_str)
+            else:
+                step = 1 if start_val <= end_val else -1
+                
+            # For decreasing ranges with custom step, make step negative
+            if start_val > end_val and step > 0:
+                step = -step
+                
+            items = [str(i) for i in range(start_val, end_val + (1 if step > 0 else -1), step)]
         
         # Alphabetic range
         elif len(start) == 1 and len(end) == 1 and start.isalpha() and end.isalpha():
             start_val, end_val = ord(start), ord(end)
-            step = 1 if start_val <= end_val else -1
-            items = [chr(i) for i in range(start_val, end_val + step, step)]
+            
+            # Parse step if present, otherwise use default step
+            if step_str and step_str.isdigit() and int(step_str) > 0:
+                step = int(step_str)
+            else:
+                step = 1 if start_val <= end_val else -1
+                
+            # For decreasing ranges with custom step, make step negative
+            if start_val > end_val and step > 0:
+                step = -step
+                
+            items = [chr(i) for i in range(start_val, end_val + (1 if step > 0 else -1), step)]
         
         # Not a valid range
         else:
