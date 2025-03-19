@@ -275,9 +275,35 @@ def prompt(template: Optional[str] = None, *_args) -> int:
         "status": "[\\?] \\w\\$ "
     }
     
-    actual_template = predefined.get(template, template)
+    # Use predefined template if specified
+    if template in predefined:
+        actual_template = predefined[template]
+    else:
+        # When used from command line, backslashes are literal rather than escape characters
+        # We need to add backslashes to each prompt variable character
+        prompt_vars = 'uhHwW$?etTdgj!v'
+        if all(f'\\{var}' not in template for var in prompt_vars):
+            # None of the properly escaped variables are present, assume we need to add backslashes
+            actual_template = ""
+            i = 0
+            while i < len(template):
+                if i < len(template) - 1 and template[i] == '\\':
+                    # Skip escape sequences
+                    actual_template += template[i:i+2]
+                    i += 2
+                elif template[i] in prompt_vars:
+                    # Add backslash before prompt variable characters
+                    actual_template += f'\\{template[i]}'
+                    i += 1
+                else:
+                    # Regular character, pass through unchanged
+                    actual_template += template[i]
+                    i += 1
+        else:
+            # Template already has proper escapes, use as is
+            actual_template = template
     
-    # Set new prompt template
+    # Set new prompt template and test it
     try:
         config_manager.set('prompt_template', actual_template)
         # Test the new template
