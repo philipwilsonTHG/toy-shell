@@ -130,11 +130,13 @@ class ShellContext:
     
     def get_prompt(self) -> str:
         """Generate shell prompt based on configuration"""
-        # Use the ConfigManager to get a formatted prompt
         from .config.manager import ConfigManager
         
-        # Use the ConfigManager's prompt generator
-        config_manager = ConfigManager()
+        # Use the stored config_manager if available, otherwise create a new one
+        config_manager = getattr(self, '_config_manager', None)
+        if config_manager is None:
+            config_manager = ConfigManager()
+            
         return config_manager.generate_prompt()
 
 

@@ -188,3 +188,103 @@ def function_command(name: str = None, *args) -> int:
     except Exception as e:
         print(f"function: error defining function {name}: {e}", file=sys.stderr)
         return 1
+
+
+def prompt(template: Optional[str] = None, *_args) -> int:
+    """Change or display the shell prompt template.
+    
+    Usage:
+        prompt                 - Display current prompt template
+        prompt "new_template"  - Set prompt to the given template
+        prompt -h              - Show help with available prompt variables
+        prompt -l              - List predefined prompt templates
+        
+    Returns:
+        0 on success, 1 on error
+    """
+    from ..context import SHELL
+    from ..config.manager import ConfigManager
+    from ..utils.prompt import PromptFormatter
+    
+    # Get the current shell instance
+    shell_instance = SHELL.get_current_shell()
+    if not shell_instance:
+        sys.stderr.write("prompt: no active shell instance\n")
+        return 1
+    
+    # Get the config manager
+    if hasattr(SHELL, '_config_manager'):
+        config_manager = SHELL._config_manager
+    elif hasattr(shell_instance, 'config_manager'):
+        config_manager = shell_instance.config_manager
+    else:
+        config_manager = ConfigManager()
+    
+    # Display help info
+    if template in ("-h", "--help"):
+        print("Prompt Variables:")
+        print("  \\u - Username")
+        print("  \\h - Hostname (short)")
+        print("  \\H - Hostname (FQDN)")
+        print("  \\w - Current working directory")
+        print("  \\W - Basename of current directory")
+        print("  \\$ - # for root, $ for regular user")
+        print("  \\? - Exit status (colored)")
+        print("  \\e - Raw exit status")
+        print("  \\t - Current time (HH:MM:SS)")
+        print("  \\T - Current time (12-hour)")
+        print("  \\d - Current date")
+        print("  \\g - Git branch")
+        print("  \\j - Number of jobs")
+        print("  \\! - History number")
+        print("  \\v - Python virtualenv")
+        print("\nColor codes:")
+        print("  \\[COLOR] - Start color (e.g. \\[red])")
+        print("  \\[reset] - Reset color")
+        print("\nAvailable colors:")
+        for color in sorted(PromptFormatter.COLORS.keys()):
+            print(f"  {color}")
+        return 0
+    
+    # List predefined prompts
+    if template in ("-l", "--list"):
+        print("Predefined prompts:")
+        print("  default    - \\[blue]\\u@\\h\\[reset]:\\[cyan]\\w\\[reset] \\[green]\\g\\[reset]\\$ ")
+        print("  minimal    - \\$ ")
+        print("  basic      - \\u@\\h:\\w\\$ ")
+        print("  path       - \\w\\$ ")
+        print("  full       - [\\t] \\u@\\h:\\w \\g (\\j) \\$ ")
+        print("  git        - \\w \\[green]\\g\\[reset]\\$ ")
+        print("  status     - [\\?] \\w\\$ ")
+        return 0
+    
+    # With no arguments, display current template
+    if template is None:
+        current = config_manager.get('prompt_template')
+        print(f"Current prompt template: {current}")
+        return 0
+    
+    # Handle predefined prompts
+    predefined = {
+        "default": "\\[blue]\\u@\\h\\[reset]:\\[cyan]\\w\\[reset] \\[green]\\g\\[reset]\\$ ",
+        "minimal": "\\$ ",
+        "basic": "\\u@\\h:\\w\\$ ",
+        "path": "\\w\\$ ",
+        "full": "[\\t] \\u@\\h:\\w \\g (\\j) \\$ ",
+        "git": "\\w \\[green]\\g\\[reset]\\$ ",
+        "status": "[\\?] \\w\\$ "
+    }
+    
+    actual_template = predefined.get(template, template)
+    
+    # Set new prompt template
+    try:
+        config_manager.set('prompt_template', actual_template)
+        # Test the new template
+        formatter = PromptFormatter()
+        formatted = formatter.format(actual_template)
+        print(f"Prompt set to: {formatted}")
+        return 0
+    except Exception as e:
+        sys.stderr.write(f"prompt: error setting prompt: {e}\n")
+        return 1

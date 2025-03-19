@@ -77,6 +77,10 @@ class Shell:
             # Reset prompt formatter with latest exit status
             if hasattr(self, 'last_exit_status'):
                 self.prompt_formatter.set_exit_status(self.last_exit_status)
+                
+            # Make config_manager available to builtins
+            from .context import SHELL
+            SHELL._config_manager = self.config_manager
             
             # Special handling for function definitions
             # Don't split function definitions on semicolons
