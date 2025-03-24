@@ -165,7 +165,10 @@ The shell has undergone significant upgrades to improve reliability and expand f
    - More efficient handling of quotes, variables, and arithmetic expressions
    - Built-in caching for better performance
    - Robust handling of nested constructs
+   - Modular implementation with separate components for improved maintainability
    
+The State Machine Expander has been refactored into a modular system with specialized components for tokenization, pattern handling, and variable modifiers, while maintaining backward compatibility through a compatibility layer.
+
 The new parser and state machine expander provide better maintainability, performance, and extensibility, allowing for easier addition of new shell features.
 
 ## Project Structure
@@ -195,8 +198,16 @@ src/
 │   ├── parser.py       # Main parser (legacy)
 │   ├── quotes.py       # Quote handling
 │   ├── word_expander.py     # Regex-based variable expansion
-│   ├── state_machine_expander.py  # State machine-based expansion
+│   ├── state_machine_expander.py  # State machine-based expansion (compatibility layer)
 │   ├── state_machine_adapter.py   # Adapter for compatibility
+│   ├── state_machine/       # Modular state machine implementation
+│   │   ├── __init__.py      # Exports main components
+│   │   ├── types.py         # TokenType, Token, and State definitions
+│   │   ├── context.py       # StateContext class
+│   │   ├── tokenizer.py     # Tokenizer implementation
+│   │   ├── pattern_utils.py # Shell pattern handling utilities
+│   │   ├── variable_modifiers.py  # Variable modifier handlers
+│   │   └── expander.py      # Main StateMachineExpander class
 │   ├── token_types.py      # Token types and definitions
 │   ├── lexer.py            # Lexical analysis
 │   ├── redirection.py      # Redirection handling

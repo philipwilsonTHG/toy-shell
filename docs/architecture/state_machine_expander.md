@@ -3,9 +3,26 @@
 ## Overview
 The state machine expander is an optimization implementation for variable expansion in the Python Shell (psh). It replaces the previous regex-based approach with a more efficient character-by-character state machine. This document outlines the architecture and key components of this implementation.
 
+## Module Structure
+
+As of the recent refactoring, the state machine expander implementation has been divided into multiple modules under the `src/parser/state_machine/` directory for improved maintainability:
+
+```
+src/parser/state_machine/
+├── __init__.py           # Exports main components
+├── types.py              # TokenType, Token, and State definitions
+├── context.py            # StateContext class
+├── tokenizer.py          # Tokenizer implementation
+├── pattern_utils.py      # Shell pattern handling utilities
+├── variable_modifiers.py # Functions for handling modifiers (${VAR#pattern}, etc.)
+├── expander.py           # Main StateMachineExpander class
+```
+
+For backward compatibility, `src/parser/state_machine_expander.py` re-exports all components from these modules.
+
 ## Key Components
 
-### 1. TokenType (Enum)
+### 1. TokenType (Enum) - `types.py`
 Defines different token types that can be identified during tokenization:
 - `LITERAL`: Regular text with no special handling
 - `VARIABLE`: Variable reference like $VAR
@@ -18,13 +35,13 @@ Defines different token types that can be identified during tokenization:
 - `ESCAPED_CHAR`: Escaped character like \$
 - `BRACE_PATTERN`: Brace expansion pattern like {a,b,c}
 
-### 2. Token (Class)
+### 2. Token (Class) - `types.py`
 Represents a token with:
 - `type`: The token type (from TokenType enum)
 - `value`: The token's value (text content)
 - `raw`: Original text (useful for preserving original input when needed)
 
-### 3. State (Enum)
+### 3. State (Enum) - `types.py`
 Defines the different states for the state machine:
 - `NORMAL`: Regular text processing
 - `DOLLAR`: Just seen a $ character, determining what follows
@@ -42,7 +59,7 @@ Defines the different states for the state machine:
 - `BRACE_PATTERN_START`: Just seen {, preparing for brace pattern
 - `BRACE_PATTERN`: Inside {...}, processing brace expansion pattern
 
-### 4. StateContext (Class)
+### 4. StateContext (Class) - `context.py`
 Manages the state machine context, tracking:
 - Current position in the input text
 - Current state and state stack for nested constructs
@@ -55,7 +72,7 @@ Key methods:
 - `pop_state()`: Pop state when exiting nested constructs
 - `add_token()`: Add a completed token to the token list
 
-### 5. Tokenizer (Class)
+### 5. Tokenizer (Class) - `tokenizer.py`
 Core component that implements the state machine for tokenization:
 - Processes text character-by-character in a single pass
 - Uses a state handler for each possible state
@@ -63,7 +80,18 @@ Core component that implements the state machine for tokenization:
 - Handles nested structures using counters and state stack
 - Creates appropriate tokens for different shell constructs
 
-### 6. StateMachineExpander (Class)
+### 6. Pattern Utilities - `pattern_utils.py`
+Utility functions for shell pattern handling:
+- `shell_pattern_to_regex()`: Converts shell wildcards to regex patterns
+- `split_brace_pattern()`: Splits brace patterns respecting nesting
+
+### 7. Variable Modifiers - `variable_modifiers.py`
+Functions for handling shell variable modifiers:
+- `handle_pattern_removal()`: Handles ${VAR#pattern} and ${VAR%pattern}
+- `handle_pattern_substitution()`: Handles ${VAR/pattern/replacement}
+- `handle_case_modification()`: Handles ${VAR^}, ${VAR^^}, etc.
+
+### 8. StateMachineExpander (Class) - `expander.py`
 Expands shell constructs using tokens from the Tokenizer:
 - Takes a scope provider function to look up variable values
 - Tokenizes input text with the Tokenizer
@@ -76,7 +104,7 @@ Expands shell constructs using tokens from the Tokenizer:
 - Implements caching for variables and arithmetic expressions
 - Provides fast paths for common cases
 
-### 7. StateMachineWordExpander (Adapter Class)
+### 9. StateMachineWordExpander (Adapter Class)
 Adapter to make the state machine implementation compatible with the existing interface:
 - Conforms to the same API as the original WordExpander
 - Maps API calls to the appropriate StateMachineExpander methods
