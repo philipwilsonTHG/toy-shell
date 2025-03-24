@@ -44,7 +44,18 @@ psh
 
 # Run script
 psh script.sh
+
+# Run with a specific command
+psh -c 'echo $SHELL'
 ```
+
+## Version History
+
+Recent versions:
+- **v0.9.7**: Enhanced pattern expansion with improved URL and file path handling
+- **v0.9.6**: Added support for dynamic prompt formatting
+- **v0.9.5**: Fixed brace expansion in interactive mode
+- **v0.9.4**: Improved case statement handling
 
 ## Shell Features
 
@@ -86,6 +97,35 @@ echo \$VAR        # Escaped variables are treated literally
 # Important: When running commands from a shell, use single quotes to preserve $ signs
 psh -c 'for i in 1 2 3; do echo $i; done'  # Works correctly
 psh -c "for i in 1 2 3; do echo \$i; done" # Needs double escaping if using double quotes
+```
+
+### Advanced Parameter Expansion
+```bash
+# Parameter manipulation (as of v0.9.7)
+filename="document.tar.gz"
+
+# Path manipulation
+echo ${filename%.*}       # Remove shortest match of pattern from end: document.tar
+echo ${filename%%.*}      # Remove longest match of pattern from end: document
+echo ${filename#*.}       # Remove shortest match of pattern from beginning: tar.gz
+echo ${filename##*.}      # Remove longest match of pattern from beginning: gz
+
+# String manipulation
+text="Hello World"
+echo ${text/World/Friend}  # Replace first occurrence: Hello Friend
+echo ${text//l/L}          # Replace all occurrences: HeLLo WorLd
+
+# Case modification
+echo ${text,}              # Convert first character to lowercase: hello World
+echo ${text,,}             # Convert all characters to lowercase: hello world
+echo ${text^}              # Convert first character to uppercase: Hello World
+echo ${text^^}             # Convert all characters to uppercase: HELLO WORLD
+
+# URL and path handling
+url="https://example.com/path/to/file.html"
+echo ${url%%://*}          # Extract protocol: https
+echo ${url#*://}           # Remove protocol: example.com/path/to/file.html
+echo ${url##*/}            # Get filename: file.html
 ```
 
 ### Command Substitution
@@ -167,7 +207,12 @@ The shell has undergone significant upgrades to improve reliability and expand f
    - Robust handling of nested constructs
    - Modular implementation with separate components for improved maintainability
    
-The State Machine Expander has been refactored into a modular system with specialized components for tokenization, pattern handling, and variable modifiers, while maintaining backward compatibility through a compatibility layer.
+The State Machine Expander (as of v0.9.7) has been enhanced with:
+   - Advanced pattern expansion for URLs, file paths, and string manipulation
+   - Specialized pattern utilities for common shell operations
+   - Improved escape handling for complex patterns
+   - Multiple extension support for file operations
+   - Modular architecture with specialized components for tokenization, pattern handling, and variable modifiers
 
 The new parser and state machine expander provide better maintainability, performance, and extensibility, allowing for easier addition of new shell features.
 
