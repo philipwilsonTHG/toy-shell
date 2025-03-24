@@ -2,10 +2,13 @@
 
 import os
 import unittest
-from src.parser.expander_facade import expand_arithmetic
+from src.parser.state_machine_expander import StateMachineExpander
 from src.parser.lexer import tokenize
 
 class TestArithmeticExpansion(unittest.TestCase):
+    def setUp(self):
+        # Create a StateMachineExpander instance for each test
+        self.expander = StateMachineExpander(os.environ.get, debug_mode=False)
     
     def test_basic_arithmetic(self):
         """Test basic arithmetic operations"""
@@ -19,7 +22,7 @@ class TestArithmeticExpansion(unittest.TestCase):
         ]
         
         for input_expr, expected in test_cases:
-            self.assertEqual(expand_arithmetic(input_expr), expected)
+            self.assertEqual(self.expander.expand_arithmetic(input_expr), expected)
     
     def test_variable_expansion(self):
         """Test arithmetic with variable expansion"""
@@ -35,7 +38,7 @@ class TestArithmeticExpansion(unittest.TestCase):
         ]
         
         for input_expr, expected in test_cases:
-            self.assertEqual(expand_arithmetic(input_expr), expected)
+            self.assertEqual(self.expander.expand_arithmetic(input_expr), expected)
             
     def test_undefined_variables_in_arithmetic(self):
         """Test arithmetic with undefined variables (should evaluate to 0)"""
@@ -69,7 +72,7 @@ class TestArithmeticExpansion(unittest.TestCase):
         ]
         
         for input_expr, expected in test_cases:
-            self.assertEqual(expand_arithmetic(input_expr), expected)
+            self.assertEqual(self.expander.expand_arithmetic(input_expr), expected)
     
     def test_complex_expressions(self):
         """Test more complex arithmetic expressions"""
@@ -86,15 +89,13 @@ class TestArithmeticExpansion(unittest.TestCase):
         ]
         
         for input_expr, expected in test_cases:
-            self.assertEqual(expand_arithmetic(input_expr), expected)
+            self.assertEqual(self.expander.expand_arithmetic(input_expr), expected)
             
     def test_nested_arithmetic(self):
         """Test nested arithmetic expressions"""
-        from src.parser.expander_facade import expand_all
-        
-        # Test nested arithmetic using expand_all
+        # Test nested arithmetic using expand
         test_case = '$((1 + $((2 * 3))))'
-        self.assertEqual(expand_all(test_case), '7')
+        self.assertEqual(self.expander.expand_all(test_case), '7')
     
     def test_lexer_recognition(self):
         """Test that the lexer recognizes arithmetic expressions"""
@@ -106,11 +107,9 @@ class TestArithmeticExpansion(unittest.TestCase):
         
     def test_integration_with_expand_all(self):
         """Test that arithmetic expansion works within expand_all"""
-        from src.parser.expander_facade import expand_all
-        
         # Directly test arithmetic expansion in expand_all
-        self.assertEqual(expand_all("$((1 + 2))"), "3")
-        self.assertEqual(expand_all("The result is $(( 10 * 5 ))"), "The result is 50")
+        self.assertEqual(self.expander.expand_all("$((1 + 2))"), "3")
+        self.assertEqual(self.expander.expand_all("The result is $(( 10 * 5 ))"), "The result is 50")
         
         # Test with shell execution style
         test_cases = [
@@ -122,7 +121,7 @@ class TestArithmeticExpansion(unittest.TestCase):
         for input_cmd, expected in test_cases:
             # Process each token and expand
             tokens = tokenize(input_cmd)
-            expanded_tokens = [expand_all(token.value) for token in tokens]
+            expanded_tokens = [self.expander.expand_all(token.value) for token in tokens]
             result = ' '.join(expanded_tokens)
             self.assertEqual(result, expected)
 

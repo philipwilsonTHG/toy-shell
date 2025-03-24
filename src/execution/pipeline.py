@@ -8,7 +8,8 @@ from typing import List, Tuple, Dict, Optional
 
 from ..parser.token_types import Token, TokenType, create_word_token
 from ..parser.redirection import RedirectionParser
-from ..parser.expander_facade import expand_all, expand_command_substitution, expand_braces
+from ..parser.state_machine_expander import StateMachineExpander
+from ..parser import expand_variables, expand_all, expand_braces, expand_command_substitution, expand_tilde, expand_wildcards, expand_arithmetic
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController
 from ..builtins import BUILTINS
@@ -18,10 +19,9 @@ class TokenExpander:
     """Handles expansion of tokens (variables, wildcards, etc.)"""
     
     def __init__(self):
-        # Initialize the word expander for variable expansion
-        from ..parser.state_machine_adapter import StateMachineWordExpander
-        self.word_expander = StateMachineWordExpander(os.environ.get, 
-                                                     os.environ.get('DEBUG_SHELL') is not None)
+        # Initialize the state machine expander directly
+        self.expander = StateMachineExpander(os.environ.get, 
+                                            os.environ.get('DEBUG_SHELL') is not None)
     
     def expand_token(self, token: Token) -> List[str]:
         """Expand a single token into a list of strings"""
@@ -29,7 +29,7 @@ class TokenExpander:
         
         if token.token_type == TokenType.SUBSTITUTION:
             # Handle command substitution
-            expanded = expand_command_substitution(token.value)
+            expanded = self.expander.expand_command(token.value)
             if expanded:
                 expanded_tokens.extend(expanded.split())
         else:
@@ -40,7 +40,7 @@ class TokenExpander:
             # Handle brace expansion first if not in single quotes
             if '{' in token.value and not is_single_quoted:
                 # Directly use expand_braces to get the list of expansions
-                braces_expanded = expand_braces(token.value)
+                braces_expanded = self.expander.expand_braces(token.value)
                 
                 # For debugging
                 if os.environ.get('DEBUG_EXPANSION') or os.environ.get('DEBUG_SHELL'):
@@ -50,7 +50,7 @@ class TokenExpander:
                 # For each brace expansion result, also do variable expansion
                 for brace_item in braces_expanded:
                     # Now run other expansion steps, including variables
-                    var_expanded = self.word_expander.expand(brace_item) if hasattr(self, 'word_expander') else expand_all(brace_item)
+                    var_expanded = self.expander.expand(brace_item)
                     
                     # For debugging
                     if os.environ.get('DEBUG_EXPANSION') or os.environ.get('DEBUG_SHELL'):
@@ -73,7 +73,7 @@ class TokenExpander:
                             expanded_tokens.append(var_expanded)
             else:
                 # Handle other expansions including variables
-                expanded = expand_all(token.value)
+                expanded = self.expander.expand_all_with_brace_expansion(token.value)
                 
                 # For debugging
                 if os.environ.get('DEBUG_EXPANSION'):
@@ -138,6 +138,9 @@ class RedirectionHandler:
         # First, process and collect all redirections
         saved_fds = {}  # Keep track of saved file descriptors
         
+        # Initialize a StateMachineExpander for expanding targets
+        expander = StateMachineExpander(os.environ.get, False)
+        
         # Process output redirections first, then handle descriptor duplications (2>&1)
         # This ensures that when we redirect stderr to stdout, stdout is already pointing to the right place
         output_redirections = []
@@ -152,7 +155,7 @@ class RedirectionHandler:
                 
         # Process regular file redirections first
         for op, target in output_redirections:
-            target = expand_all(target)
+            target = expander.expand_all_with_brace_expansion(target)
                 
             # Parse redirection operator for source fd
             if op.startswith('2'):  # stderr redirection
@@ -309,7 +312,6 @@ class PipelineExecutor:
                     
                     # If it was in double quotes, we still need to expand variables
                     if token.value.startswith('"'):
-                        from ..parser.expander import expand_variables
                         value = expand_variables(value)
                     
                     # Debug output

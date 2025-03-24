@@ -169,4 +169,4 @@ class StateMachineWordExpander:
         """
         # Create a simple expander that uses environment variables
         expander = StateMachineExpander(os.environ.get, False)
-        return expander.expand(text)
+        return expander.expand_all(text)

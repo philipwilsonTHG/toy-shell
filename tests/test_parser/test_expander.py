@@ -3,8 +3,11 @@ import pytest
 import tempfile
 import shutil
 
-# Import the new expander facade for testing
-from src.parser.expander_facade import (
+# Import the state machine expander directly
+from src.parser.state_machine_expander import StateMachineExpander
+
+# For backward compatibility with existing tests, import the re-exported functions
+from src.parser import (
     expand_variables,
     expand_all,
     expand_command_substitution,
@@ -12,9 +15,6 @@ from src.parser.expander_facade import (
     expand_wildcards,
     expand_arithmetic
 )
-
-# We'll also need the state machine expander for direct testing
-from src.parser.state_machine_expander import StateMachineExpander
 
 @pytest.fixture
 def setup_env():

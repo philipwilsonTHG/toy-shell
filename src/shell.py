@@ -12,8 +12,9 @@ from .utils.completion import Completer
 from .parser.token_types import Token, TokenType, create_word_token
 from .parser.lexer import tokenize
 from .parser.parser.shell_parser import ShellParser
-from .parser.expander_facade import expand_variables
+from .parser.state_machine_expander import StateMachineExpander
 from .parser.state_machine_adapter import StateMachineWordExpander
+from .parser import expand_variables, expand_all, expand_braces, expand_command_substitution, expand_tilde, expand_wildcards, expand_arithmetic
 from .config.manager import ConfigManager
 from .execution.pipeline import PipelineExecutor
 from .execution.job_manager import JobManager

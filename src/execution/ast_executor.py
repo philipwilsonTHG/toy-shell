@@ -13,7 +13,7 @@ from ..parser.ast import (
 )
 from ..execution.pipeline import PipelineExecutor
 from ..context import SHELL
-from ..parser.expander_facade import expand_all, expand_braces
+from ..parser.state_machine_expander import StateMachineExpander
 from ..parser.token_types import Token, TokenType, create_word_token
 from ..parser.state_machine_adapter import StateMachineWordExpander
 
@@ -307,8 +307,9 @@ class ASTExecutor(ASTVisitor):
         
         # First check for brace expansion in the command
         if '{' in fixed_command and not (fixed_command.startswith("'") and fixed_command.endswith("'")):
-            from ..parser.brace_expander import expand_braces
-            braces_expanded = expand_braces(fixed_command)
+            # Use StateMachineExpander directly
+            expander = StateMachineExpander(self.current_scope.get, self.debug_mode)
+            braces_expanded = expander.expand_braces(fixed_command)
             
             if self.debug_mode:
                 print(f"[DEBUG] Command brace expansion: '{fixed_command}' → {braces_expanded}", file=sys.stderr)
@@ -359,9 +360,10 @@ class ASTExecutor(ASTVisitor):
             
             # Handle brace expansion first if applicable (and not in single quotes)
             if '{' in fixed_arg and not is_single_quoted:
-                # Directly use expand_braces to get proper list expansion
-                from ..parser.brace_expander import expand_braces
-                braces_expanded = expand_braces(fixed_arg)
+                # Use the StateMachineExpander's expand_braces method
+                # Create a new expander if we don't already have one
+                expander = StateMachineExpander(self.current_scope.get, self.debug_mode)
+                braces_expanded = expander.expand_braces(fixed_arg)
                 
                 if self.debug_mode:
                     print(f"[DEBUG] Brace expansion: '{fixed_arg}' → {braces_expanded}", file=sys.stderr)

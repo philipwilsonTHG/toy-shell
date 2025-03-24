@@ -2,13 +2,8 @@
 """
 State Machine based implementation for shell variable expansion.
 Provides a more efficient tokenizer and expander using state machine approach.
-
-This module is a compatibility layer that re-exports components from 
-the state_machine directory. It's maintained for backward compatibility
-while allowing a more modular code organization.
 """
 
-# Re-export all components for backward compatibility
 from src.parser.state_machine.types import TokenType, Token, State
 from src.parser.state_machine.context import StateContext
 from src.parser.state_machine.tokenizer import Tokenizer

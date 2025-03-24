@@ -60,16 +60,52 @@ All tests now pass using the new implementation, including:
 
 The migration is completely transparent to existing code, maintaining the same interface while improving the implementation.
 
+## Phase 2 Migration: Direct StateMachineExpander Usage
+
+Following the initial migration to the state machine architecture, a second phase has now been completed to move from using the adapter pattern (expander_facade) to direct usage of the StateMachineExpander class.
+
+### Primary Changes Made
+
+1. **Direct Usage Implementation**:
+   - Updated shell.py, pipeline.py, and ast_executor.py to import and instantiate StateMachineExpander directly
+   - Removed dependency on expander_facade functions for core shell operation
+   - Modified parser/__init__.py to create a global StateMachineExpander instance for compatibility
+
+2. **Test Updates**:
+   - Converted test_arithmetic.py to use StateMachineExpander directly
+   - Updated test_expander_regression.py to use StateMachineExpander instead of facade functions
+   - Ensured all core tests continue to pass with the new approach
+
+3. **Functionality Fixes**:
+   - Fixed variable modifier `:=` to properly set environment variables
+   - Improved pattern removal with wildcards
+   - Enhanced path pattern handling for common shell idioms
+   - Fixed nested variable expansion for common patterns
+
+### Benefits Achieved
+
+1. **Better Performance**: Direct usage of StateMachineExpander reduces function call overhead
+2. **Improved Type Safety**: Better type annotations and clearer parameter requirements
+3. **Enhanced Maintainability**: Reduced unnecessary abstraction layer
+4. **More Control**: Direct access to expander configuration and behavior
+
+### Remaining Issues
+
+See [Advanced Expansion TODO](advanced_expansion_todo.md) for details of advanced pattern expansion features that still need implementation.
+
 ## Future Work
 
 1. **Performance Benchmarking**:
    - Measure performance improvements in real-world scenarios
    - Identify bottlenecks for further optimization
 
-2. **Feature Extensions**:
-   - Add support for more complex expansion patterns
-   - Improve error reporting and diagnostics
+2. **Advanced Pattern Expansion Implementation**:
+   - Implement complex URL parsing and extraction
+   - Add support for escaped delimiters in patterns
+   - Enhance multi-step pattern operations
+   - Complete documentation of all advanced features
 
-3. **Code Cleanup**:
-   - Gradually transition to using the new API directly, bypassing the adapter
-   - Remove special case handling as the state machine implementation is improved
+3. **Complete Facade Removal**:
+   - Finish migrating all code to use StateMachineExpander directly
+   - Eventually remove the facade module entirely
+   - Update all documentation to reflect direct usage patterns

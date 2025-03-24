@@ -69,6 +69,11 @@ class TestExpansionModifiers(unittest.TestCase):
         self.variables["digits"] = "123abc"
         result = self.expander.expand("${digits#[0-9]*}")
         self.assertEqual(result, "abc")
+        
+        # Add explicit test for prefix matching pattern removal
+        self.variables["path"] = "/usr/local/share/data"
+        result = self.expander.expand("${path#*/}")
+        self.assertEqual(result, "local/share/data")
     
     def test_complex_pattern_removal(self):
         """Test complex pattern removal scenarios"""
