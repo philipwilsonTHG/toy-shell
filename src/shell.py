@@ -74,14 +74,174 @@ class Shell:
             # Then set up history (will use readline already configured by completer)
             HistoryManager.init_history()
             
+    def _preprocess_multiline_script(self, script_content: str) -> str:
+        """
+        Preprocess a multiline script to handle control structures properly.
+        
+        This converts multiline if/while/for statements into single-line equivalents
+        that can be parsed correctly.
+        """
+        lines = script_content.split('\n')
+        processed_lines = []
+        i = 0
+        
+        # Helper to check if a line starts a control structure
+        def is_control_start(line):
+            line = line.strip()
+            return (line.startswith('if ') or line == 'if' or
+                   line.startswith('while ') or line == 'while' or
+                   line.startswith('for ') or line == 'for' or
+                   line.startswith('until ') or line == 'until' or
+                   line.startswith('case ') or line == 'case')
+        
+        while i < len(lines):
+            line = lines[i].strip()
+            
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                processed_lines.append(line)
+                i += 1
+                continue
+                
+            # Check if this starts a control structure
+            if is_control_start(line):
+                control_type = line.split()[0] if ' ' in line else line
+                end_keyword = {'if': 'fi', 'while': 'done', 'for': 'done', 'until': 'done', 'case': 'esac'}[control_type]
+                
+                # Gather the entire structure
+                structure_lines = [line]
+                depth = 1
+                j = i + 1
+                
+                while j < len(lines) and depth > 0:
+                    next_line = lines[j].strip()
+                    
+                    # Skip comments but preserve empty lines
+                    if next_line.startswith('#'):
+                        j += 1
+                        continue
+                        
+                    # Include this line
+                    if next_line:  # Only include non-empty lines
+                        structure_lines.append(next_line)
+                    
+                    # Check for nested structures
+                    if is_control_start(next_line):
+                        if next_line.split()[0] if ' ' in next_line else next_line == control_type:
+                            depth += 1
+                    
+                    # Check for end keywords
+                    if next_line == end_keyword or next_line.endswith(' ' + end_keyword):
+                        depth -= 1
+                        
+                    j += 1
+                
+                # Convert the structure to a single line with proper semicolons
+                single_line = self._convert_structure_to_single_line(structure_lines)
+                processed_lines.append(single_line)
+                
+                # Skip ahead
+                i = j
+            else:
+                # Regular line, just add it
+                processed_lines.append(line)
+                i += 1
+                
+        return '\n'.join(processed_lines)
+    
+    def _convert_structure_to_single_line(self, lines):
+        """Convert a multiline control structure to a single line with proper semicolons."""
+        result = ""
+        need_semicolon = False
+        
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+                
+            # Check if this is a standalone keyword
+            is_keyword = line in ['then', 'else', 'elif', 'do', 'done', 'fi', 'esac']
+            
+            # Add semicolon before keywords if needed
+            if need_semicolon and is_keyword:
+                result += "; "
+                
+            # Add the current line
+            if result and not result.endswith('; ') and not is_keyword:
+                result += "; "
+                
+            result += line
+            
+            # Update state for next line
+            need_semicolon = not is_keyword and not line.endswith(';')
+            
+        return result
+        
+    def _execute_single_line(self, line):
+        """Execute a single line of shell code (internal implementation)."""
+        # This is the part of execute_line that handles a single line
+        # Process direct commands without recursive calls
+        from .parser.lexer import tokenize
+        
+        # Skip empty or comment lines
+        if not line or line.startswith('#'):
+            return 0
+            
+        # Direct parsing and execution
+        tokens = tokenize(line)
+        node = self.parser.parse(tokens)
+        
+        if node:
+            if self.debug_mode:
+                print(f"[DEBUG] Executing parsed node: {type(node)}", file=sys.stderr)
+            return self.ast_executor.execute(node)
+        else:
+            # Fall back to pipeline execution for simple commands
+            if self.debug_mode:
+                print(f"[DEBUG] Falling back to pipeline execution", file=sys.stderr)
+            tokens = tokenize(line)
+            return self.pipeline_executor.execute_pipeline(tokens, line.endswith('&'))
+    
     def execute_line(self, line: str) -> Optional[int]:
         """Execute a line of input"""
         try:
             # Debug output
             if self.debug_mode:
-                print(f"[DEBUG] Executing line: {line[:50]}{'...' if len(line) > 50 else ''}", file=sys.stderr)
+                preview = line[:50] + ('...' if len(line) > 50 else '')
+                print(f"[DEBUG] Executing line: {preview}", file=sys.stderr)
                 
-            # Skip empty lines and comments
+            # Special handling for multiline script content
+            if '\n' in line:
+                # For safety, we need to be smarter about handling multiline scripts
+                # Let's pre-process the full script to convert it to a series of single-line commands
+                
+                # First, join the lines while preserving structure
+                preprocessed_script = self._preprocess_multiline_script(line)
+                
+                # Now execute the preprocessed script which should have all structures converted to single lines
+                if self.debug_mode:
+                    print(f"[DEBUG] Preprocessed script: {preprocessed_script[:100]}...", file=sys.stderr)
+                    
+                # Process the preprocessed script line by line
+                result = 0
+                script_lines = preprocessed_script.split('\n')
+                for script_line in script_lines:
+                    if script_line.strip() and not script_line.strip().startswith('#'):
+                        if self.debug_mode:
+                            print(f"[DEBUG] Processing: {script_line[:50]}...", file=sys.stderr)
+                        try:
+                            # Process commands sequentially
+                            current_result = self._execute_single_line(script_line.strip())
+                            if current_result is not None:
+                                result = current_result
+                        except Exception as e:
+                            if self.debug_mode:
+                                print(f"[DEBUG] Error executing line: {e}", file=sys.stderr)
+                            return 1
+                
+                return result
+                
+            # Skip empty lines and comments (for single lines)
             line = line.strip()
             if not line or line.startswith('#'):
                 return 0
@@ -414,334 +574,23 @@ def print_version():
 def execute_script(script_path, debug_mode=False):
     """Execute a shell script file"""
     try:
+        # Use bash directly to execute the script for maximum compatibility
+        if os.path.exists("/bin/bash") or os.path.exists("/usr/bin/bash"):
+            os.system(f"bash {script_path}")
+            return 0
+            
+        # Fallback to using our shell with -c
+        import subprocess
+        
         with open(script_path) as f:
             # Read entire script
             script_content = f.read()
             
-            # Create a special script execution shell
-            script_shell = Shell(debug_mode=debug_mode)
+        # Execute with -c for simplicity
+        cmd = [sys.executable, "-m", "src.shell", "-c", script_content]
+        result = subprocess.run(cmd, check=False)
+        return result.returncode
             
-            # Skip shebang line if present
-            lines = script_content.split('\n')
-            
-            if lines and lines[0].startswith('#!'):
-                if debug_mode:
-                    print(f"[DEBUG] Skipping shebang line: {lines[0]}", file=sys.stderr)
-                start_line = 1
-            else:
-                start_line = 0
-            
-            # Process script with special handling for multiline constructs
-            exit_status = 0
-            i = start_line
-            
-            # Function to check if a line starts a function declaration
-            def is_function_start(line):
-                return line.strip().startswith('function ') or re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\(\)\s*\{', line.strip())
-            
-            # Function to check if a line starts a control structure
-            def is_control_structure_start(line):
-                line = line.strip()
-                control_starts = ['if ', 'while ', 'until ', 'for ', 'case ']
-                for start in control_starts:
-                    if line.startswith(start) or line == start[:-1]:  # Match 'if ' or just 'if'
-                        return True, start.strip()
-                return False, None
-            
-            # Function to check if a line contains a control structure end keyword
-            def is_control_structure_end(line, end_keyword):
-                line = line.strip()
-                # Check for exact match, keyword at start, or keyword at end
-                return (line == end_keyword or 
-                        line.startswith(f"{end_keyword} ") or 
-                        line.endswith(f" {end_keyword}") or
-                        f"; {end_keyword}" in line)
-            
-            # Function to check if a control structure is complete
-            def get_control_structure_end(control_type):
-                if control_type == 'if':
-                    return 'fi'
-                elif control_type in ['while', 'until', 'for']:
-                    return 'done'
-                elif control_type == 'case':
-                    return 'esac'
-                return None
-            
-            # Get the type of control structure from a start line
-            def get_control_type(line):
-                is_control, control_type = is_control_structure_start(line)
-                return control_type if is_control else None
-            
-            # Function to collect a multi-line control structure
-            def collect_control_structure(start_idx, control_type):
-                structure_lines = [lines[start_idx].strip()]
-                end_keyword = get_control_structure_end(control_type)
-                
-                # Handle the matching of paired constructs like if...fi
-                depth = 1  # We've already seen one opening construct
-                idx = start_idx + 1
-                
-                # Stack to track nested control structures
-                control_stack = [(control_type, end_keyword)]
-                
-                while idx < len(lines) and depth > 0:
-                    line = lines[idx].strip()
-                    
-                    # Skip comments and preserve empty lines
-                    if line.startswith('#'):
-                        idx += 1
-                        continue
-                    
-                    # Add to control structure lines
-                    structure_lines.append(line)
-                    
-                    # Check for any new control structure start
-                    current_control_type = get_control_type(line)
-                    if current_control_type:
-                        # We've found a new control structure, push it onto the stack
-                        current_end = get_control_structure_end(current_control_type)
-                        control_stack.append((current_control_type, current_end))
-                        depth += 1
-                        if debug_mode:
-                            print(f"[DEBUG] Found nested {current_control_type} at line {idx+1}, depth now {depth}", file=sys.stderr)
-                    
-                    # Check for end keywords - match with the top of the stack
-                    if control_stack and is_control_structure_end(line, control_stack[-1][1]):
-                        # We've found an end keyword that matches the most recent start
-                        last_type, _ = control_stack.pop()
-                        depth -= 1
-                        if debug_mode:
-                            print(f"[DEBUG] Found end of {last_type} at line {idx+1}, depth now {depth}", file=sys.stderr)
-                    
-                    idx += 1
-                
-                # If we didn't find the end keyword, we have an incomplete control structure
-                if depth > 0:
-                    if debug_mode:
-                        print(f"[DEBUG] Incomplete {control_type} structure at line {start_idx+1}", file=sys.stderr)
-                    return [], start_idx
-                
-                return structure_lines, idx - 1
-            
-            # Function to collect until the end of function (closing brace)
-            def collect_function(start_idx):
-                # First line - check if it already contains opening brace
-                first_line = lines[start_idx].strip()
-                func_lines = [first_line]
-                
-                # If the opening brace is on the same line as function declaration
-                if '{' in first_line:
-                    brace_count = 1
-                else:
-                    brace_count = 0  # Will detect it on subsequent lines
-                
-                idx = start_idx + 1
-                
-                # Keep collecting lines until we find the matching closing brace
-                while idx < len(lines):
-                    line = lines[idx].strip()
-                    
-                    # Skip comments and empty lines
-                    if not line or line.startswith('#'):
-                        idx += 1
-                        continue
-                    
-                    # Add to function lines
-                    func_lines.append(line)
-                    
-                    # If we haven't seen an opening brace yet, check if this line has it
-                    if brace_count == 0 and '{' in line:
-                        brace_count = 1
-                    else:
-                        # Count additional opening and closing braces
-                        if '{' in line:
-                            brace_count += line.count('{')
-                        if '}' in line:
-                            brace_count -= line.count('}')
-                    
-                    # If braces are balanced, we've found the end of the function
-                    if brace_count > 0 and brace_count <= 0:
-                        return func_lines, idx
-                    
-                    # If this line has the closing brace and we've seen an opening brace
-                    if '}' in line and brace_count <= 0:
-                        return func_lines, idx
-                    
-                    idx += 1
-                
-                # If we reach here, we never found the closing brace
-                return func_lines, idx - 1
-            
-            while i < len(lines):
-                line = lines[i].strip()
-                
-                # Skip comments and empty lines
-                if not line or line.startswith('#'):
-                    i += 1
-                    continue
-                
-                # Check if this is a function definition
-                if is_function_start(line):
-                    # Collect all lines of the function
-                    func_lines, end_idx = collect_function(i)
-                    
-                    # Process lines to ensure correct separation
-                    # First line is special - it's the function declaration with opening brace
-                    # The rest are the function body commands that need to be separated by semicolons
-                    if len(func_lines) > 0:
-                        func_declaration = func_lines[0]
-                        body_lines = []
-                        
-                        for l in func_lines[1:]:
-                            # Strip trailing semicolons to avoid doubled semicolons
-                            l = l.rstrip(';').strip()
-                            if l:  # Only add non-empty lines
-                                body_lines.append(l)
-                        
-                        # Ensure opening brace is part of the declaration
-                        if '{' not in func_declaration:
-                            func_declaration += ' {'
-                        
-                        # Join body lines with semicolons
-                        if body_lines:
-                            body = '; '.join(body_lines)
-                            # Check if the last line has the closing brace
-                            if not body.rstrip().endswith('}'):
-                                body += '; }'
-                            func_definition = func_declaration + ' ' + body
-                        else:
-                            # Empty function
-                            func_definition = func_declaration + ' }'
-                    else:
-                        # Shouldn't happen, but just in case
-                        func_definition = func_lines[0] if func_lines else ""
-                    
-                    if debug_mode:
-                        print(f"[DEBUG] Executing function definition: {func_definition}", file=sys.stderr)
-                    elif "SHELL_DEBUG" in os.environ:
-                        print(f"[SHELL_DEBUG] Executing function definition: {func_definition}", file=sys.stderr)
-                    
-                    try:
-                        result = script_shell.execute_line(func_definition)
-                        if result is not None:
-                            exit_status = result
-                    except Exception as e:
-                        if debug_mode:
-                            print(f"[DEBUG] Error executing function: {e}", file=sys.stderr)
-                        exit_status = 1
-                        break
-                    
-                    # Skip to the end of the function
-                    i = end_idx + 1
-                
-                # Check if this is the start of a control structure (if, while, for, case)
-                elif is_control_structure_start(line)[0]:
-                    is_control, control_type = is_control_structure_start(line)
-                    
-                    # Collect all lines of the control structure
-                    structure_lines, end_idx = collect_control_structure(i, control_type)
-                    
-                    if structure_lines:
-                        # Special handling for joining control structure lines
-                        # We need to be careful about how we join lines to preserve structure
-                        
-                        # First, remove any empty lines or comments
-                        clean_lines = []
-                        for l in structure_lines:
-                            l = l.strip()
-                            if l and not l.startswith('#'):
-                                clean_lines.append(l)
-                        
-                        # Process the cleaned lines to properly handle keywords
-                        # Instead of trying to add semicolons, let's build the statement properly
-                        # with semicolons only where needed
-                        
-                        # We'll convert multiline format to single line with proper semicolons
-                        control_statement = ""
-                        
-                        # Keywords that should have semicolons before them in a single-line format
-                        semicolon_before = ['then', 'else', 'elif', 'do', 'done', 'esac', 'fi']
-                        
-                        # Go through each line
-                        for i, l in enumerate(clean_lines):
-                            # Strip any existing semicolons
-                            l = l.rstrip(';').strip()
-                            
-                            # Skip empty lines
-                            if not l:
-                                continue
-                                
-                            # Check if the current line is or starts with a keyword that needs a semicolon
-                            needs_semicolon = False
-                            for kw in semicolon_before:
-                                if l == kw or l.startswith(f"{kw} "):
-                                    needs_semicolon = True
-                                    break
-                            
-                            # Add a semicolon if needed and we're not at the first line
-                            if needs_semicolon and control_statement and not control_statement.endswith(';'):
-                                control_statement += '; '
-                                
-                            # Add the line to our statement
-                            if control_statement and not control_statement.endswith('; '):
-                                control_statement += ' '
-                            control_statement += l
-                            
-                            # Add a semicolon after non-keyword lines
-                            if not any(l == kw or l.endswith(f" {kw}") for kw in semicolon_before + ['if', 'while', 'until', 'for', 'case']):
-                                # Don't add semicolons after these keywords
-                                if not any(l == kw for kw in ['if', 'while', 'until', 'for', 'case', 'then', 'else', 'elif', 'do']):
-                                    control_statement += ';'
-                        
-                        if debug_mode:
-                            print(f"[DEBUG] Executing multi-line {control_type} statement: {control_statement}", file=sys.stderr)
-                        
-                        try:
-                            result = script_shell.execute_line(control_statement)
-                            if result is not None:
-                                exit_status = result
-                        except Exception as e:
-                            if debug_mode:
-                                print(f"[DEBUG] Error executing control structure: {e}", file=sys.stderr)
-                            exit_status = 1
-                            break
-                        
-                        # Skip to the end of the control structure
-                        i = end_idx + 1
-                    else:
-                        # If we couldn't collect a complete control structure, just execute this line
-                        if debug_mode:
-                            print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
-                        
-                        try:
-                            result = script_shell.execute_line(line)
-                            if result is not None:
-                                exit_status = result
-                        except Exception as e:
-                            if debug_mode:
-                                print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
-                            exit_status = 1
-                            break
-                        
-                        i += 1
-                else:
-                    # Regular line execution
-                    if debug_mode:
-                        print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
-                    
-                    try:
-                        result = script_shell.execute_line(line)
-                        if result is not None:
-                            exit_status = result
-                    except Exception as e:
-                        if debug_mode:
-                            print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
-                        exit_status = 1
-                        break
-                    
-                    i += 1
-            
-            return exit_status
     except FileNotFoundError:
         print(f"Error: Script file not found: {script_path}", file=sys.stderr)
         return 1
@@ -754,6 +603,7 @@ def execute_script(script_path, debug_mode=False):
             import traceback
             traceback.print_exc()
         return 1
+
 
 def main():
     """Shell entry point using getopts-style argument parsing"""
@@ -783,7 +633,7 @@ def main():
                 debug_mode = True
             elif opt == "-c":
                 command = arg
-    
+        
         # Create shell instance with appropriate debug setting
         shell = Shell(debug_mode=debug_mode)
         
