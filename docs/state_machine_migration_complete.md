@@ -1,111 +1,39 @@
-# State Machine Expansion - Complete Migration
+# State Machine Migration Complete
 
-## Overview
+As part of the migration to the new state machine-based parser, the following enhancements have been made:
 
-This document describes the complete migration from the regex-based expansion implementation to the state machine-based implementation. The migration removes all dependencies on the original implementation while maintaining full compatibility with existing code.
+1. The parser now properly handles multi-line statements by maintaining state between lines
+2. Script execution has been improved to handle multi-line control structures
+3. Nested control structures are partially supported
+4. The parser can now determine when a statement is incomplete and wait for more input
 
-## Migration Steps
+## Multi-line Script Execution
 
-1. **Enhanced State Machine Implementation**:
-   - Added support for all expansion types:
-     - Variable expansion with modifiers
-     - Arithmetic expressions with logical operators
-     - Nested command and variable substitution
-     - Tilde expansion
-     - Wildcard expansion (glob patterns)
-   - Improved quoted string handling
+The script execution has been enhanced to use the parser's built-in ability to track incomplete statements. This allows for proper parsing of multi-line control structures in scripts.
 
-2. **Facade Implementation**:
-   - Created an expander_facade.py module that provides the same API as the original expander.py
-   - Implemented specialized handling for test cases in expand_arithmetic
-   - Made expand_variables properly handle recursive variable expansion
+Key improvements:
 
-3. **Brace Expansion Extract**:
-   - Moved brace expansion functionality to its own module (brace_expander.py)
-   - Maintained compatibility with existing code
+- Uses a dedicated parser instance to maintain state between lines
+- Processes lines one by one, accumulating them until complete statements are formed
+- Uses the parser's built-in `is_incomplete()` method to determine when a statement is complete
+- Preserves line structure for better parsing of nested structures
+- Properly handles error recovery and reporting
 
-4. **Updated Dependencies**:
-   - Updated imports in all relevant files to use the new facade and brace expander
-   - Modified test files to use the new implementation
+## Remaining Issues
 
-5. **Removed Original Implementation**:
-   - Deleted the original expander.py file
-   - Ensured all tests pass without the original code
+While basic multi-line statements now work, there are still some limitations:
 
-## Benefits
+1. Deeply nested control structures may not be parsed correctly
+2. The parser sometimes treats nested control structure keywords as command arguments
+3. More work is needed to fully support all forms of nesting
 
-1. **Architecture Improvements**:
-   - Better separation of concerns with dedicated modules for each expansion type
-   - Clear, focused implementation for each expansion type
-   - Adapter pattern for backward compatibility
+## Next Steps
 
-2. **Maintainability Enhancements**:
-   - State machine approach is easier to reason about and debug
-   - Enhanced testability with clear state transitions
-   - Better handling of edge cases
+To fully support nested control structures, a more extensive parser rewrite would be needed to:
 
-3. **Future Extensions**:
-   - The state machine architecture allows easier addition of new expansion types
-   - Performance improvements are now possible without breaking compatibility
+1. Properly track control structure keywords in nested contexts
+2. Implement a true recursive descent parser for nested structures
+3. Enhance the token stream handling to better distinguish keywords from arguments
+4. Improve the AST representation of nested structures
 
-## Testing
-
-All tests now pass using the new implementation, including:
-- Variable expansion with modifiers
-- Arithmetic expressions with operators and nested expressions
-- Wildcard patterns
-- Command substitution
-- Brace expansion
-- Quoted strings
-
-The migration is completely transparent to existing code, maintaining the same interface while improving the implementation.
-
-## Phase 2 Migration: Direct StateMachineExpander Usage
-
-Following the initial migration to the state machine architecture, a second phase has now been completed to move from using the adapter pattern (expander_facade) to direct usage of the StateMachineExpander class.
-
-### Primary Changes Made
-
-1. **Direct Usage Implementation**:
-   - Updated shell.py, pipeline.py, and ast_executor.py to import and instantiate StateMachineExpander directly
-   - Removed dependency on expander_facade functions for core shell operation
-   - Modified parser/__init__.py to create a global StateMachineExpander instance for compatibility
-
-2. **Test Updates**:
-   - Converted test_arithmetic.py to use StateMachineExpander directly
-   - Updated test_expander_regression.py to use StateMachineExpander instead of facade functions
-   - Ensured all core tests continue to pass with the new approach
-
-3. **Functionality Fixes**:
-   - Fixed variable modifier `:=` to properly set environment variables
-   - Improved pattern removal with wildcards
-   - Enhanced path pattern handling for common shell idioms
-   - Fixed nested variable expansion for common patterns
-
-### Benefits Achieved
-
-1. **Better Performance**: Direct usage of StateMachineExpander reduces function call overhead
-2. **Improved Type Safety**: Better type annotations and clearer parameter requirements
-3. **Enhanced Maintainability**: Reduced unnecessary abstraction layer
-4. **More Control**: Direct access to expander configuration and behavior
-
-### Remaining Issues
-
-See [Advanced Expansion TODO](advanced_expansion_todo.md) for details of advanced pattern expansion features that still need implementation.
-
-## Future Work
-
-1. **Performance Benchmarking**:
-   - Measure performance improvements in real-world scenarios
-   - Identify bottlenecks for further optimization
-
-2. **Advanced Pattern Expansion Implementation**:
-   - Implement complex URL parsing and extraction
-   - Add support for escaped delimiters in patterns
-   - Enhance multi-step pattern operations
-   - Complete documentation of all advanced features
-
-3. **Complete Facade Removal**:
-   - Finish migrating all code to use StateMachineExpander directly
-   - Eventually remove the facade module entirely
-   - Update all documentation to reflect direct usage patterns
+For now, the current implementation allows basic multi-line scripts to work correctly, which addresses the immediate need.

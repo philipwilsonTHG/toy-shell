@@ -158,11 +158,22 @@ class ShellParser:
         if not hasattr(self, 'buffer'):
             self.buffer = []
         
+        # Add line with a newline instead of a space to better preserve structure
+        # This helps the parser distinguish nested control structures
         self.buffer.append(line)
         
         # Try to parse the combined buffer
-        combined = " ".join(self.buffer)
-        result = self.parse_line(combined)
+        # Join with newlines instead of spaces to better preserve structure
+        combined = "\n".join(self.buffer)
+        
+        # First tokenize properly
+        from ..lexer import tokenize
+        tokens = tokenize(combined)
+        
+        # Parse with a fresh context to get proper nesting
+        self.context = ParserContext()
+        stream = TokenStream(tokens)
+        result = self.parse_program(stream, self.context)
         
         # If parsing is complete, reset buffer
         if result is not None and not self.context.is_in_progress():
@@ -194,19 +205,34 @@ class ShellParser:
         # If not an AND-OR list, proceed with regular parsing
         statements = []
         
+        # Improved handling for nested structures
         while not stream.is_at_end():
+            # Store starting position of this statement
+            start_pos = stream.current_position()
+            
             # Select the appropriate rule based on the current token
             rule = self.select_rule(stream)
             
             # Parse the next statement
             stmt = rule.parse(stream, context)
+            
             if stmt is not None:
                 statements.append(stmt)
-            
-            # If we're in recovery mode, skip to the next statement
-            if context.in_recovery_mode():
+            elif context.is_in_progress():
+                # Incomplete statement, wait for more input
+                return None
+            else:
+                # Failed to parse - try to recover or skip token
+                if not context.in_recovery_mode():
+                    context.enter_recovery_mode()
+                
+                # Synchronize to next statement boundary
                 self.synchronize(stream, context)
                 context.exit_recovery_mode()
+                
+                # If we couldn't make progress, skip this token to avoid infinite loop
+                if stream.current_position().index == start_pos.index and not stream.is_at_end():
+                    stream.consume()
         
         # If there are no statements, return None
         if not statements:

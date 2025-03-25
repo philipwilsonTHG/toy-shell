@@ -79,11 +79,24 @@ class CommandRule(GrammarRule):
                     # If we have args, just break and return what we have - pipeline rule will handle the rest
                     break
                     
-            # Check for keywords that might indicate the end of a command
-            if token.token_type == TokenType.KEYWORD and token.value in {
-                'then', 'else', 'elif', 'fi', 'do', 'done', 'esac'
-            }:
-                break
+            # Check for keywords that might indicate the end of a command or start of a nested control structure
+            if token.token_type == TokenType.KEYWORD:
+                # End keywords terminate the current command
+                if token.value in {
+                    'then', 'else', 'elif', 'fi', 'do', 'done', 'esac'
+                }:
+                    break
+                # Start keywords like 'if', 'while', 'for' indicate a nested control structure
+                # Rather than consuming them as arguments, break so the main parser can handle them
+                elif token.value in {
+                    'if', 'while', 'until', 'for', 'case', 'function'
+                }:
+                    # If we're at the beginning of the command (no args yet), let another rule handle it
+                    if not args:
+                        stream.restore_position(start_pos)
+                        return None
+                    # Otherwise, break to let the parent parser continue with a new rule
+                    break
                 
             # Parse redirections
             if self._is_redirection(token):

@@ -74,174 +74,14 @@ class Shell:
             # Then set up history (will use readline already configured by completer)
             HistoryManager.init_history()
             
-    def _preprocess_multiline_script(self, script_content: str) -> str:
-        """
-        Preprocess a multiline script to handle control structures properly.
-        
-        This converts multiline if/while/for statements into single-line equivalents
-        that can be parsed correctly.
-        """
-        lines = script_content.split('\n')
-        processed_lines = []
-        i = 0
-        
-        # Helper to check if a line starts a control structure
-        def is_control_start(line):
-            line = line.strip()
-            return (line.startswith('if ') or line == 'if' or
-                   line.startswith('while ') or line == 'while' or
-                   line.startswith('for ') or line == 'for' or
-                   line.startswith('until ') or line == 'until' or
-                   line.startswith('case ') or line == 'case')
-        
-        while i < len(lines):
-            line = lines[i].strip()
-            
-            # Skip empty lines and comments
-            if not line or line.startswith('#'):
-                processed_lines.append(line)
-                i += 1
-                continue
-                
-            # Check if this starts a control structure
-            if is_control_start(line):
-                control_type = line.split()[0] if ' ' in line else line
-                end_keyword = {'if': 'fi', 'while': 'done', 'for': 'done', 'until': 'done', 'case': 'esac'}[control_type]
-                
-                # Gather the entire structure
-                structure_lines = [line]
-                depth = 1
-                j = i + 1
-                
-                while j < len(lines) and depth > 0:
-                    next_line = lines[j].strip()
-                    
-                    # Skip comments but preserve empty lines
-                    if next_line.startswith('#'):
-                        j += 1
-                        continue
-                        
-                    # Include this line
-                    if next_line:  # Only include non-empty lines
-                        structure_lines.append(next_line)
-                    
-                    # Check for nested structures
-                    if is_control_start(next_line):
-                        if next_line.split()[0] if ' ' in next_line else next_line == control_type:
-                            depth += 1
-                    
-                    # Check for end keywords
-                    if next_line == end_keyword or next_line.endswith(' ' + end_keyword):
-                        depth -= 1
-                        
-                    j += 1
-                
-                # Convert the structure to a single line with proper semicolons
-                single_line = self._convert_structure_to_single_line(structure_lines)
-                processed_lines.append(single_line)
-                
-                # Skip ahead
-                i = j
-            else:
-                # Regular line, just add it
-                processed_lines.append(line)
-                i += 1
-                
-        return '\n'.join(processed_lines)
-    
-    def _convert_structure_to_single_line(self, lines):
-        """Convert a multiline control structure to a single line with proper semicolons."""
-        result = ""
-        need_semicolon = False
-        
-        for line in lines:
-            line = line.strip()
-            if not line:
-                continue
-                
-            # Check if this is a standalone keyword
-            is_keyword = line in ['then', 'else', 'elif', 'do', 'done', 'fi', 'esac']
-            
-            # Add semicolon before keywords if needed
-            if need_semicolon and is_keyword:
-                result += "; "
-                
-            # Add the current line
-            if result and not result.endswith('; ') and not is_keyword:
-                result += "; "
-                
-            result += line
-            
-            # Update state for next line
-            need_semicolon = not is_keyword and not line.endswith(';')
-            
-        return result
-        
-    def _execute_single_line(self, line):
-        """Execute a single line of shell code (internal implementation)."""
-        # This is the part of execute_line that handles a single line
-        # Process direct commands without recursive calls
-        from .parser.lexer import tokenize
-        
-        # Skip empty or comment lines
-        if not line or line.startswith('#'):
-            return 0
-            
-        # Direct parsing and execution
-        tokens = tokenize(line)
-        node = self.parser.parse(tokens)
-        
-        if node:
-            if self.debug_mode:
-                print(f"[DEBUG] Executing parsed node: {type(node)}", file=sys.stderr)
-            return self.ast_executor.execute(node)
-        else:
-            # Fall back to pipeline execution for simple commands
-            if self.debug_mode:
-                print(f"[DEBUG] Falling back to pipeline execution", file=sys.stderr)
-            tokens = tokenize(line)
-            return self.pipeline_executor.execute_pipeline(tokens, line.endswith('&'))
-    
     def execute_line(self, line: str) -> Optional[int]:
         """Execute a line of input"""
         try:
             # Debug output
             if self.debug_mode:
-                preview = line[:50] + ('...' if len(line) > 50 else '')
-                print(f"[DEBUG] Executing line: {preview}", file=sys.stderr)
+                print(f"[DEBUG] Executing line: {line[:50]}{'...' if len(line) > 50 else ''}", file=sys.stderr)
                 
-            # Special handling for multiline script content
-            if '\n' in line:
-                # For safety, we need to be smarter about handling multiline scripts
-                # Let's pre-process the full script to convert it to a series of single-line commands
-                
-                # First, join the lines while preserving structure
-                preprocessed_script = self._preprocess_multiline_script(line)
-                
-                # Now execute the preprocessed script which should have all structures converted to single lines
-                if self.debug_mode:
-                    print(f"[DEBUG] Preprocessed script: {preprocessed_script[:100]}...", file=sys.stderr)
-                    
-                # Process the preprocessed script line by line
-                result = 0
-                script_lines = preprocessed_script.split('\n')
-                for script_line in script_lines:
-                    if script_line.strip() and not script_line.strip().startswith('#'):
-                        if self.debug_mode:
-                            print(f"[DEBUG] Processing: {script_line[:50]}...", file=sys.stderr)
-                        try:
-                            # Process commands sequentially
-                            current_result = self._execute_single_line(script_line.strip())
-                            if current_result is not None:
-                                result = current_result
-                        except Exception as e:
-                            if self.debug_mode:
-                                print(f"[DEBUG] Error executing line: {e}", file=sys.stderr)
-                            return 1
-                
-                return result
-                
-            # Skip empty lines and comments (for single lines)
+            # Skip empty lines and comments
             line = line.strip()
             if not line or line.startswith('#'):
                 return 0
@@ -572,25 +412,88 @@ def print_version():
     return 0
 
 def execute_script(script_path, debug_mode=False):
-    """Execute a shell script file"""
+    """
+    Execute a shell script file with proper handling of multi-line statements.
+    
+    This implementation reads lines one by one and uses the parser's multi-line
+    parsing capability to handle complex nested structures, the same way the
+    interactive shell does.
+    """
     try:
-        # Use bash directly to execute the script for maximum compatibility
-        if os.path.exists("/bin/bash") or os.path.exists("/usr/bin/bash"):
-            os.system(f"bash {script_path}")
-            return 0
-            
-        # Fallback to using our shell with -c
-        import subprocess
-        
         with open(script_path) as f:
-            # Read entire script
+            # Read entire script content
             script_content = f.read()
             
-        # Execute with -c for simplicity
-        cmd = [sys.executable, "-m", "src.shell", "-c", script_content]
-        result = subprocess.run(cmd, check=False)
-        return result.returncode
+        # Create a shell instance for script execution
+        script_shell = Shell(debug_mode=debug_mode)
+        
+        # Create a dedicated parser for tracking multi-line statements
+        script_parser = ShellParser()
+        
+        # Split into lines
+        lines = script_content.split('\n')
+        
+        # Skip shebang line if present
+        if lines and lines[0].startswith('#!'):
+            if debug_mode:
+                print(f"[DEBUG] Skipping shebang line: {lines[0]}", file=sys.stderr)
+            start_line = 1
+        else:
+            start_line = 0
             
+        # Execute script with proper handling of multi-line statements
+        exit_status = 0
+        current_line = start_line
+        
+        while current_line < len(lines):
+            line = lines[current_line].strip()
+            current_line += 1
+            
+            # Skip empty lines and comments
+            if not line or line.startswith('#'):
+                continue
+            
+            if debug_mode:
+                print(f"[DEBUG] Processing line: {line}", file=sys.stderr)
+            
+            # Use the parser's multi-line capability to process this line
+            # This maintains parser state between lines
+            node = script_parser.parse_multi_line(line)
+            
+            # If we have a complete statement, execute it
+            if node is not None:
+                if debug_mode:
+                    print(f"[DEBUG] Executing complete statement", file=sys.stderr)
+                    print(f"[DEBUG] AST: {node}", file=sys.stderr)
+                
+                try:
+                    # Execute the parsed AST directly
+                    result = script_shell.ast_executor.execute(node)
+                    
+                    # Update exit status
+                    if result is not None:
+                        exit_status = result
+                        
+                except Exception as e:
+                    print(f"Error executing script: {e}", file=sys.stderr)
+                    if debug_mode:
+                        import traceback
+                        traceback.print_exc()
+                    exit_status = 1
+                    
+                    # Reset parser state after an error
+                    script_parser = ShellParser()
+            elif debug_mode:
+                # Statement is incomplete, continue to next line
+                print(f"[DEBUG] Statement incomplete, continuing to next line", file=sys.stderr)
+        
+        # If we have an incomplete statement at the end, report an error
+        if script_parser.is_incomplete():
+            print("Error: Incomplete statement at end of script", file=sys.stderr)
+            exit_status = 1
+                
+        return exit_status
+                
     except FileNotFoundError:
         print(f"Error: Script file not found: {script_path}", file=sys.stderr)
         return 1
