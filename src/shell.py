@@ -439,6 +439,64 @@ def execute_script(script_path, debug_mode=False):
             def is_function_start(line):
                 return line.strip().startswith('function ') or re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*\(\)\s*\{', line.strip())
             
+            # Function to check if a line starts a control structure
+            def is_control_structure_start(line):
+                line = line.strip()
+                control_starts = ['if ', 'while ', 'until ', 'for ', 'case ']
+                for start in control_starts:
+                    if line.startswith(start) or line == start[:-1]:  # Match 'if ' or just 'if'
+                        return True, start.strip()
+                return False, None
+            
+            # Function to check if a control structure is complete
+            def get_control_structure_end(control_type):
+                if control_type == 'if':
+                    return 'fi'
+                elif control_type in ['while', 'until', 'for']:
+                    return 'done'
+                elif control_type == 'case':
+                    return 'esac'
+                return None
+            
+            # Function to collect a multi-line control structure
+            def collect_control_structure(start_idx, control_type):
+                structure_lines = [lines[start_idx].strip()]
+                end_keyword = get_control_structure_end(control_type)
+                
+                # Handle the matching of paired constructs like if...fi
+                depth = 1  # We've already seen one opening construct
+                idx = start_idx + 1
+                
+                while idx < len(lines) and depth > 0:
+                    line = lines[idx].strip()
+                    
+                    # Skip comments and preserve empty lines
+                    if line.startswith('#'):
+                        idx += 1
+                        continue
+                    
+                    # Add to control structure lines
+                    structure_lines.append(line)
+                    
+                    # Check for nested structures of the same type
+                    is_control, nested_type = is_control_structure_start(line)
+                    if is_control and nested_type == control_type:
+                        depth += 1
+                    
+                    # Check for end keywords
+                    if line == end_keyword or line.startswith(f"{end_keyword} ") or line.endswith(f" {end_keyword}"):
+                        depth -= 1
+                    
+                    idx += 1
+                
+                # If we didn't find the end keyword, we have an incomplete control structure
+                if depth > 0:
+                    if debug_mode:
+                        print(f"[DEBUG] Incomplete {control_type} structure at line {start_idx+1}", file=sys.stderr)
+                    return [], start_idx
+                
+                return structure_lines, idx - 1
+            
             # Function to collect until the end of function (closing brace)
             def collect_function(start_idx):
                 # First line - check if it already contains opening brace
@@ -549,6 +607,60 @@ def execute_script(script_path, debug_mode=False):
                     
                     # Skip to the end of the function
                     i = end_idx + 1
+                
+                # Check if this is the start of a control structure (if, while, for, case)
+                elif is_control_structure_start(line)[0]:
+                    is_control, control_type = is_control_structure_start(line)
+                    
+                    # Collect all lines of the control structure
+                    structure_lines, end_idx = collect_control_structure(i, control_type)
+                    
+                    if structure_lines:
+                        # Join lines with semicolons for parsing as a single statement
+                        # First remove existing semicolons to avoid duplicates
+                        clean_lines = []
+                        for l in structure_lines:
+                            l = l.strip()
+                            if l and not l.startswith('#'):
+                                # Strip trailing semicolons to avoid doubled semicolons
+                                l = l.rstrip(';').strip()
+                                if l:  # Only add non-empty lines
+                                    clean_lines.append(l)
+                                    
+                        # Join the lines with semicolons
+                        control_statement = '; '.join(clean_lines)
+                        
+                        if debug_mode:
+                            print(f"[DEBUG] Executing multi-line {control_type} statement: {control_statement}", file=sys.stderr)
+                        
+                        try:
+                            result = script_shell.execute_line(control_statement)
+                            if result is not None:
+                                exit_status = result
+                        except Exception as e:
+                            if debug_mode:
+                                print(f"[DEBUG] Error executing control structure: {e}", file=sys.stderr)
+                            exit_status = 1
+                            break
+                        
+                        # Skip to the end of the control structure
+                        i = end_idx + 1
+                    else:
+                        # If we couldn't collect a complete control structure, just execute this line
+                        if debug_mode:
+                            print(f"[DEBUG] Executing script line {i+1}: {line}", file=sys.stderr)
+                        
+                        try:
+                            result = script_shell.execute_line(line)
+                            if result is not None:
+                                exit_status = result
+                        except Exception as e:
+                            if debug_mode:
+                                print(f"[DEBUG] Error executing line {i+1}: {e}", file=sys.stderr)
+                            exit_status = 1
+                            break
+                        
+                        i += 1
                 else:
                     # Regular line execution
                     if debug_mode:
