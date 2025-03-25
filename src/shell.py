@@ -179,23 +179,44 @@ class Shell:
                     
                     return last_status
                 
-            # Handle special variables in the line using the word expander
+            # Handle special variables in the line
             if any(special_var in line for special_var in ["$?", "$$", "$!", "$-", "$0", "$#", "$*", "$@"]):
-                # Update special variables
-                if "$?" in line:
-                    # Exit status is already tracked
-                    pass
-                
+                # Special handling for $$ (PID)
                 if "$$" in line:
-                    # PID is handled by special variable handler
-                    pass
+                    line = line.replace("$$", str(os.getpid()))
                 
+                # Special handling for $0 (script name)
+                if "$0" in line:
+                    line = line.replace("$0", SPECIAL_VARS.get_script_name())
+                
+                # Special handling for $? (exit status)
+                if "$?" in line:
+                    line = line.replace("$?", str(self.last_exit_status))
+                
+                # Special handling for $! (background PID)
                 if "$!" in line:
-                    # Ensure the last background PID is up to date
-                    pass
+                    line = line.replace("$!", SPECIAL_VARS.get_last_bg_pid())
                 
-                # Expand all special variables
-                line = self.word_expander.expand(line)
+                # Special handling for $- (shell options)
+                if "$-" in line:
+                    line = line.replace("$-", SPECIAL_VARS.get_shell_options())
+                
+                # Special handling for $# (argument count)
+                if "$#" in line:
+                    line = line.replace("$#", str(len(SPECIAL_VARS._positional_params)))
+                
+                # Special handling for $* and $@ (arguments)
+                if "$*" in line:
+                    line = line.replace("$*", " ".join(SPECIAL_VARS._positional_params))
+                
+                if "$@" in line:
+                    line = line.replace("$@", " ".join(SPECIAL_VARS._positional_params))
+                
+                # Handle positional parameters ($1, $2, etc.)
+                for i in range(1, 10):
+                    var = f"${i}"
+                    if var in line:
+                        line = line.replace(var, SPECIAL_VARS.get_positional_param(i))
                 
             # Handle history execution with ! prefix
             if line.startswith('!'):

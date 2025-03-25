@@ -106,6 +106,10 @@ class SpecialVariableHandler:
         Returns:
             Variable value or None if not a special variable
         """
+        # Remove the $ from the name if it was included
+        if name.startswith('$'):
+            name = name[1:]
+            
         # Process ID of current shell
         if name == "$":
             return str(os.getpid())
@@ -222,7 +226,13 @@ def register_special_variable_handler(scope_provider: Callable[[str], Optional[s
     original_provider = scope_provider
     
     def enhanced_scope_provider(name: str) -> Optional[str]:
-        # Check for special variables first
+        # Special handling for variable names that need explicit mapping
+        if name == "$":
+            return str(os.getpid())
+        elif name == "0":
+            return SPECIAL_VARS.get_script_name()
+        
+        # Check for special variables with standard handling
         special_value = SPECIAL_VARS.get_special_variable(name)
         if special_value is not None:
             return special_value
