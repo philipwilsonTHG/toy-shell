@@ -448,6 +448,15 @@ def execute_script(script_path, debug_mode=False):
                         return True, start.strip()
                 return False, None
             
+            # Function to check if a line contains a control structure end keyword
+            def is_control_structure_end(line, end_keyword):
+                line = line.strip()
+                # Check for exact match, keyword at start, or keyword at end
+                return (line == end_keyword or 
+                        line.startswith(f"{end_keyword} ") or 
+                        line.endswith(f" {end_keyword}") or
+                        f"; {end_keyword}" in line)
+            
             # Function to check if a control structure is complete
             def get_control_structure_end(control_type):
                 if control_type == 'if':
@@ -458,6 +467,11 @@ def execute_script(script_path, debug_mode=False):
                     return 'esac'
                 return None
             
+            # Get the type of control structure from a start line
+            def get_control_type(line):
+                is_control, control_type = is_control_structure_start(line)
+                return control_type if is_control else None
+            
             # Function to collect a multi-line control structure
             def collect_control_structure(start_idx, control_type):
                 structure_lines = [lines[start_idx].strip()]
@@ -466,6 +480,9 @@ def execute_script(script_path, debug_mode=False):
                 # Handle the matching of paired constructs like if...fi
                 depth = 1  # We've already seen one opening construct
                 idx = start_idx + 1
+                
+                # Stack to track nested control structures
+                control_stack = [(control_type, end_keyword)]
                 
                 while idx < len(lines) and depth > 0:
                     line = lines[idx].strip()
@@ -478,14 +495,23 @@ def execute_script(script_path, debug_mode=False):
                     # Add to control structure lines
                     structure_lines.append(line)
                     
-                    # Check for nested structures of the same type
-                    is_control, nested_type = is_control_structure_start(line)
-                    if is_control and nested_type == control_type:
+                    # Check for any new control structure start
+                    current_control_type = get_control_type(line)
+                    if current_control_type:
+                        # We've found a new control structure, push it onto the stack
+                        current_end = get_control_structure_end(current_control_type)
+                        control_stack.append((current_control_type, current_end))
                         depth += 1
+                        if debug_mode:
+                            print(f"[DEBUG] Found nested {current_control_type} at line {idx+1}, depth now {depth}", file=sys.stderr)
                     
-                    # Check for end keywords
-                    if line == end_keyword or line.startswith(f"{end_keyword} ") or line.endswith(f" {end_keyword}"):
+                    # Check for end keywords - match with the top of the stack
+                    if control_stack and is_control_structure_end(line, control_stack[-1][1]):
+                        # We've found an end keyword that matches the most recent start
+                        last_type, _ = control_stack.pop()
                         depth -= 1
+                        if debug_mode:
+                            print(f"[DEBUG] Found end of {last_type} at line {idx+1}, depth now {depth}", file=sys.stderr)
                     
                     idx += 1
                 
@@ -616,19 +642,56 @@ def execute_script(script_path, debug_mode=False):
                     structure_lines, end_idx = collect_control_structure(i, control_type)
                     
                     if structure_lines:
-                        # Join lines with semicolons for parsing as a single statement
-                        # First remove existing semicolons to avoid duplicates
+                        # Special handling for joining control structure lines
+                        # We need to be careful about how we join lines to preserve structure
+                        
+                        # First, remove any empty lines or comments
                         clean_lines = []
                         for l in structure_lines:
                             l = l.strip()
                             if l and not l.startswith('#'):
-                                # Strip trailing semicolons to avoid doubled semicolons
-                                l = l.rstrip(';').strip()
-                                if l:  # Only add non-empty lines
-                                    clean_lines.append(l)
-                                    
-                        # Join the lines with semicolons
-                        control_statement = '; '.join(clean_lines)
+                                clean_lines.append(l)
+                        
+                        # Process the cleaned lines to properly handle keywords
+                        # Instead of trying to add semicolons, let's build the statement properly
+                        # with semicolons only where needed
+                        
+                        # We'll convert multiline format to single line with proper semicolons
+                        control_statement = ""
+                        
+                        # Keywords that should have semicolons before them in a single-line format
+                        semicolon_before = ['then', 'else', 'elif', 'do', 'done', 'esac', 'fi']
+                        
+                        # Go through each line
+                        for i, l in enumerate(clean_lines):
+                            # Strip any existing semicolons
+                            l = l.rstrip(';').strip()
+                            
+                            # Skip empty lines
+                            if not l:
+                                continue
+                                
+                            # Check if the current line is or starts with a keyword that needs a semicolon
+                            needs_semicolon = False
+                            for kw in semicolon_before:
+                                if l == kw or l.startswith(f"{kw} "):
+                                    needs_semicolon = True
+                                    break
+                            
+                            # Add a semicolon if needed and we're not at the first line
+                            if needs_semicolon and control_statement and not control_statement.endswith(';'):
+                                control_statement += '; '
+                                
+                            # Add the line to our statement
+                            if control_statement and not control_statement.endswith('; '):
+                                control_statement += ' '
+                            control_statement += l
+                            
+                            # Add a semicolon after non-keyword lines
+                            if not any(l == kw or l.endswith(f" {kw}") for kw in semicolon_before + ['if', 'while', 'until', 'for', 'case']):
+                                # Don't add semicolons after these keywords
+                                if not any(l == kw for kw in ['if', 'while', 'until', 'for', 'case', 'then', 'else', 'elif', 'do']):
+                                    control_statement += ';'
                         
                         if debug_mode:
                             print(f"[DEBUG] Executing multi-line {control_type} statement: {control_statement}", file=sys.stderr)
