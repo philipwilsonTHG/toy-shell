@@ -18,6 +18,7 @@ from .parser import expand_variables, expand_all, expand_braces, expand_command_
 from .config.manager import ConfigManager
 from .execution.pipeline import PipelineExecutor
 from .execution.job_manager import JobManager
+from .builtins.special_variables import SPECIAL_VARS, register_special_variable_handler
 
 
 class Shell:
@@ -41,8 +42,18 @@ class Shell:
         self.prompt_formatter = PromptFormatter()
         
         # Initialize word expander for faster variable expansion
+        # Create a scope provider that handles special variables
+        self.scope_provider = lambda name: os.environ.get(name)
+        
+        # Initialize special variables handler
+        SPECIAL_VARS.set_script_name("psh")
+        
+        # Create an enhanced scope provider that checks for special variables
+        enhanced_scope_provider = register_special_variable_handler(self.scope_provider)
+        
+        # Initialize word expander with the enhanced scope provider
         self.word_expander = StateMachineWordExpander(
-            scope_provider=lambda name: os.environ.get(name),
+            scope_provider=enhanced_scope_provider,
             debug_mode=debug_mode
         )
         
@@ -168,10 +179,22 @@ class Shell:
                     
                     return last_status
                 
-            # Handle $? special variable expansion using state machine expander
-            if "$?" in line:
-                # Temporarily update the environment to include the latest exit status
-                os.environ["?"] = str(self.last_exit_status)
+            # Handle special variables in the line using the word expander
+            if any(special_var in line for special_var in ["$?", "$$", "$!", "$-", "$0", "$#", "$*", "$@"]):
+                # Update special variables
+                if "$?" in line:
+                    # Exit status is already tracked
+                    pass
+                
+                if "$$" in line:
+                    # PID is handled by special variable handler
+                    pass
+                
+                if "$!" in line:
+                    # Ensure the last background PID is up to date
+                    pass
+                
+                # Expand all special variables
                 line = self.word_expander.expand(line)
                 
             # Handle history execution with ! prefix
@@ -311,7 +334,7 @@ class Shell:
                     # Update prompt formatter with new exit status
                     self.prompt_formatter.set_exit_status(self.last_exit_status)
                     
-                    # Set $? environment variable
+                    # Set $? environment variable (for backward compatibility)
                     os.environ["?"] = str(self.last_exit_status)
                 
                     # Check for special exit code (-1000 to -1255) indicating explicit exit

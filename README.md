@@ -11,6 +11,8 @@ A feature-rich Unix shell implemented in Python with modern features and robust 
 - Command substitution $(command)
 - Arithmetic expansion $(( expression ))
 - Brace expansion {a,b,c} and {1..5}
+- Advanced pattern expansion with URL and file path handling
+- POSIX-compliant test command for conditionals
 - Control structures (if, for, while, case)
 - Proper signal handling
 - Configurable prompt
@@ -52,6 +54,7 @@ psh -c 'echo $SHELL'
 ## Version History
 
 Recent versions:
+- **v0.9.8**: Enhanced test command with full POSIX compatibility and comprehensive file test operators
 - **v0.9.7**: Enhanced pattern expansion with improved URL and file path handling
 - **v0.9.6**: Added support for dynamic prompt formatting
 - **v0.9.5**: Fixed brace expansion in interactive mode
@@ -155,6 +158,29 @@ command 2>&1      # Redirect error to output
 ### Pipes
 ```bash
 command1 | command2 | command3
+```
+
+### Test Expressions
+```bash
+# File tests with test
+test -f /path/to/file && echo "File exists"
+test -d /path/to/dir || echo "Directory doesn't exist"
+
+# File tests with [ (same as test)
+[ -r "$file" -a -w "$file" ] && echo "File is readable and writable"
+
+# String tests
+[ "$string1" = "$string2" ] && echo "Strings are equal"
+[ -z "$string" ] && echo "String is empty"
+
+# Integer comparisons
+[ "$count" -gt 10 ] && echo "Count is greater than 10"
+
+# Logical operators
+[ ! -d "$dir" -o ! -w "$dir" ] && echo "Directory doesn't exist or isn't writable"
+
+# Complex test with parentheses
+[ \( "$a" = "$b" -o "$a" = "$c" \) -a "$d" = "$e" ] && echo "Complex condition is true"
 ```
 
 ### Line Editing

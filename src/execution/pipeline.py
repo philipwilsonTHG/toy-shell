@@ -13,6 +13,7 @@ from ..parser import expand_variables, expand_all, expand_braces, expand_command
 from ..context import SHELL, JobStatus
 from ..utils.terminal import TerminalController
 from ..builtins import BUILTINS
+from ..builtins.special_variables import SPECIAL_VARS
 
 
 class TokenExpander:
@@ -423,6 +424,9 @@ class PipelineExecutor:
                 pgid=processes[0],
                 processes=processes
             )
+            # Update the $! variable with the PID of the last background process
+            SPECIAL_VARS.set_last_bg_pid(processes[0])
+            
             print(f"[{job.id}] {processes[0]}")
             return 0  # Return success for background jobs
         

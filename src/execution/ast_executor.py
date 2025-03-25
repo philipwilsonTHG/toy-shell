@@ -16,6 +16,7 @@ from ..context import SHELL
 from ..parser.state_machine_expander import StateMachineExpander
 from ..parser.token_types import Token, TokenType, create_word_token
 from ..parser.state_machine_adapter import StateMachineWordExpander
+from ..builtins.special_variables import SPECIAL_VARS
 
 class ExecutionError(Exception):
     """Exception raised during AST execution"""
@@ -213,14 +214,27 @@ class ASTExecutor(ASTVisitor):
             old_scope = self.current_scope
             self.current_scope = Scope(old_scope)
             
-            # Set positional parameters as variables
-            for i, arg in enumerate(node.args[1:], 1):
-                # Strip quotes from the arguments if present
-                if (arg.startswith('"') and arg.endswith('"')) or \
-                   (arg.startswith("'") and arg.endswith("'")):
-                    arg = arg[1:-1]
+            # Get function arguments with proper expansion
+            expanded_args = []
+            for arg in node.args[1:]:
+                # Expand variables in the argument
+                expanded_arg = self.word_expander.expand(arg)
                 
-                # Store the argument without quotes
+                # Strip quotes from the arguments if present
+                if (expanded_arg.startswith('"') and expanded_arg.endswith('"')) or \
+                   (expanded_arg.startswith("'") and expanded_arg.endswith("'")):
+                    expanded_arg = expanded_arg[1:-1]
+                
+                expanded_args.append(expanded_arg)
+            
+            # Save previous positional parameters before setting new ones
+            SPECIAL_VARS.set_positional_params(expanded_args)
+            
+            # Set script name ($0) to function name
+            SPECIAL_VARS.set_script_name(node.command)
+            
+            # Set positional parameters in scope (for backward compatibility)
+            for i, arg in enumerate(expanded_args, 1):
                 self.current_scope.set(str(i), arg)
             
             # Execute function body
